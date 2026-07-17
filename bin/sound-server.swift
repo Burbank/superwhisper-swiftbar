@@ -14,18 +14,31 @@ func loadSound(_ name: String) -> NSSound? {
     return sound
 }
 
-guard let us = loadSound("now_US.wav"), let nl = loadSound("now_NL.wav") else {
+guard
+    let us = loadSound("now_US.wav"),
+    let nl = loadSound("now_NL.wav"),
+    let es = loadSound("now_ES.wav")
+else {
     exit(1)
 }
 
+// Tokens can be mode keys (default/super/…) or language codes (en/nl/es)
 let sounds: [String: NSSound] = [
     "default": us,
     "en": us,
+    "EN": us,
     "US": us,
     "us": us,
+
     "super": nl,
     "nl": nl,
     "NL": nl,
+
+    "es": es,
+    "ES": es,
+    "es-ES": es,
+    "es-MX": es,
+    "spanish": es,
 ]
 
 let fm = FileManager.default
@@ -43,7 +56,6 @@ func play(_ key: String) {
     _ = sound.play()
 }
 
-// FIFO reader on a background thread; NSSound plays on the main thread.
 DispatchQueue.global(qos: .userInteractive).async {
     while true {
         guard let handle = FileHandle(forReadingAtPath: fifoPath) else {

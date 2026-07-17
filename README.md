@@ -24,10 +24,11 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 
 Cue mapping (mode key → sound):
 
-| Mode key | Sound |
+| Mode key / language | Sound |
 | --- | --- |
-| `default` (English / 🇺🇸) | `sounds/now_US.wav` |
-| `super` (Dutch / 🇳🇱) | `sounds/now_NL.wav` |
+| `default` / `en` (English / 🇺🇸) | `sounds/now_US.wav` |
+| `super` / `nl` (Dutch / 🇳🇱) | `sounds/now_NL.wav` |
+| `es` (Spanish / 🇪🇸, when you add that mode) | `sounds/now_ES.wav` |
 
 ## Requirements
 

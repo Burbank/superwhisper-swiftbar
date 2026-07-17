@@ -6,15 +6,40 @@
 MODE_KEY="${1:-}"
 [ -n "$MODE_KEY" ] || { echo "Usage: $0 <mode-key>" >&2; exit 1; }
 
-FIFO="$HOME/Documents/swiftbar/sounds/play.fifo"
+SOUNDS_DIR="$HOME/Documents/swiftbar/sounds"
+FIFO="$SOUNDS_DIR/play.fifo"
+MODES_DIR="$HOME/Documents/superwhisper/modes"
+
+# Resolve a sound token: known mode keys first, else mode language (en/nl/es/…)
+sound_token="$MODE_KEY"
+case "$MODE_KEY" in
+    default|super) ;;
+    *)
+        lang=$(/usr/bin/python3 - "$MODES_DIR" "$MODE_KEY" <<'PY' 2>/dev/null
+import json, pathlib, sys
+modes_dir, want = pathlib.Path(sys.argv[1]), sys.argv[2]
+for path in modes_dir.glob("*.json"):
+    try:
+        m = json.load(open(path))
+    except Exception:
+        continue
+    if m.get("key") == want:
+        print((m.get("language") or "").split("-")[0].lower())
+        break
+PY
+)
+        [ -n "$lang" ] && sound_token="$lang"
+        ;;
+esac
 
 # Fire the preloaded cue immediately (~1ms if sound-server is running)
 if [ -p "$FIFO" ]; then
-    printf '%s\n' "$MODE_KEY" > "$FIFO"
+    printf '%s\n' "$sound_token" > "$FIFO"
 else
-    case "$MODE_KEY" in
-        default) /usr/bin/afplay "$HOME/Documents/swiftbar/sounds/now_US.wav" & ;;
-        super)   /usr/bin/afplay "$HOME/Documents/swiftbar/sounds/now_NL.wav" & ;;
+    case "$sound_token" in
+        default|en|US|us) /usr/bin/afplay "$SOUNDS_DIR/now_US.wav" & ;;
+        super|nl|NL)      /usr/bin/afplay "$SOUNDS_DIR/now_NL.wav" & ;;
+        es|ES|spanish)    /usr/bin/afplay "$SOUNDS_DIR/now_ES.wav" & ;;
     esac
 fi
 

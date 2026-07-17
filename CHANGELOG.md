@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-17 (later)
+
+- Add `sounds/now_ES.wav` for future Spanish modes (`es` language / related keys)
+
 ## 2026-07-17
 
 - SwiftBar plugin reads modes from `~/Documents/superwhisper/modes/*.json`
