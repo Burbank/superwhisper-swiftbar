@@ -2,7 +2,7 @@
 
 # ensure-btt-f3.sh
 # Ensures the Superwhisper F3 BetterTouchTool shortcut exists and is enabled.
-# Intended to run at login after BTT starts (and anytime manually).
+# Runs at login (LaunchAgent) and hourly as a safety net.
 
 set -euo pipefail
 
@@ -10,6 +10,8 @@ CYCLE="/Users/DuniaMBP/Documents/swiftbar/cycle-superwhisper-mode.sh"
 UUID_FILE="/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/btt-f3-trigger-uuid"
 NOTE="Cycle Superwhisper language modes"
 ASCRIPT="do shell script \"${CYCLE}\""
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
 # Wait for BetterTouchTool (up to ~90s after login)
 for _ in $(seq 1 90); do
@@ -20,35 +22,42 @@ for _ in $(seq 1 90); do
 done
 
 if ! pgrep -x BetterTouchTool >/dev/null 2>&1; then
-    echo "ensure-btt-f3: BetterTouchTool is not running" >&2
+    log "BetterTouchTool is not running"
     exit 1
 fi
 
-# Allow BTT to finish launching / cloud sync before we touch triggers
-sleep 8
+# Allow BTT to finish launching / cloud sync
+sleep 5
 
 /usr/bin/python3 - "$CYCLE" "$UUID_FILE" "$NOTE" "$ASCRIPT" <<'PY'
 import json, subprocess, sys, uuid
+from pathlib import Path
 
 cycle, uuid_file, note, ascript = sys.argv[1:5]
 
-def run_osa(*extra_args, timeout=30):
+def osa(*args, timeout=20):
     return subprocess.run(
-        ["osascript", *extra_args],
+        ["osascript", *args],
         capture_output=True, text=True, timeout=timeout,
     )
 
-def get_keyboard_triggers():
-    r = run_osa("-e", 'tell application "BetterTouchTool" to get_triggers trigger_type "BTTTriggerTypeKeyboardShortcut"')
-    if r.returncode != 0 or not r.stdout.strip():
-        return []
+def get_trigger(uid):
     try:
-        return json.loads(r.stdout)
+        r = osa("-e", f'tell application "BetterTouchTool" to get_triggers trigger_uuid "{uid}"', timeout=15)
+    except subprocess.TimeoutExpired:
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    try:
+        data = json.loads(r.stdout)
     except json.JSONDecodeError:
-        return []
+        return None
+    if isinstance(data, list) and data:
+        return data[0]
+    return None
 
 def add_trigger(payload):
-    r = run_osa(
+    r = osa(
         "-e",
         """
 on run argv
@@ -58,27 +67,30 @@ on run argv
 end run
 """,
         json.dumps(payload),
+        timeout=20,
     )
     return (r.stdout or "").strip()
 
 def update_trigger(uid, payload):
-    run_osa(
-        "-e",
-        """
+    try:
+        osa(
+            "-e",
+            """
 on run argv
   tell application "BetterTouchTool"
     return update_trigger (item 1 of argv) json (item 2 of argv)
   end tell
 end run
 """,
-        uid,
-        json.dumps(payload),
-    )
+            uid,
+            json.dumps(payload),
+            timeout=20,
+        )
+        return True
+    except subprocess.TimeoutExpired:
+        return False
 
-def delete_trigger(uid):
-    run_osa("-e", f'tell application "BetterTouchTool" to delete_trigger "{uid}"')
-
-payload_base = {
+payload = {
     "BTTTriggerClass": "BTTTriggerTypeKeyboardShortcut",
     "BTTTriggerType": 0,
     "BTTEnabled": 1,
@@ -95,42 +107,34 @@ payload_base = {
     "BTTInlineAppleScript": ascript,
 }
 
-triggers = get_keyboard_triggers()
-cycle_matches = [
-    t for t in triggers
-    if "cycle-superwhisper-mode.sh" in (t.get("BTTInlineAppleScript") or "")
-]
+keep_uuid = None
+saved = Path(uuid_file)
+if saved.exists():
+    candidate = saved.read_text().strip()
+    if candidate:
+        existing = get_trigger(candidate)
+        if existing and "cycle-superwhisper-mode.sh" in (existing.get("BTTInlineAppleScript") or ""):
+            keep_uuid = candidate
+            print(f"found saved {keep_uuid}")
 
-keep = None
-if cycle_matches:
-    keep = sorted(cycle_matches, key=lambda t: t.get("BTTLastUpdatedAt") or 0, reverse=True)[0]
-    for t in cycle_matches:
-        if t["BTTUUID"] != keep["BTTUUID"]:
-            delete_trigger(t["BTTUUID"])
-            print(f"removed duplicate {t['BTTUUID']}")
-
-if keep is None:
+if keep_uuid is None:
     new_uuid = str(uuid.uuid4()).upper()
-    payload = dict(payload_base)
-    payload["BTTUUID"] = new_uuid
-    created = add_trigger(payload)
+    payload_create = dict(payload)
+    payload_create["BTTUUID"] = new_uuid
+    created = add_trigger(payload_create)
     keep_uuid = created or new_uuid
     print(f"created {keep_uuid}")
+
+if update_trigger(keep_uuid, payload):
+    print(f"enabled {keep_uuid}")
 else:
-    keep_uuid = keep["BTTUUID"]
-    print(f"found {keep_uuid}")
+    print(f"warning: enable timed out for {keep_uuid}")
 
-update_trigger(keep_uuid, payload_base)
-print(f"enabled {keep_uuid}")
-
-with open(uuid_file, "w") as f:
-    f.write(keep_uuid + "\n")
+saved.parent.mkdir(parents=True, exist_ok=True)
+saved.write_text(keep_uuid + "\n")
 PY
 
-# Bare F3 as a function key (not Mission Control / Show Desktop)
 /usr/bin/defaults write -g com.apple.keyboard.fnState -bool true
-
-# Keep the sound cue agent alive
 /bin/launchctl kickstart -k "gui/$(id -u)/com.burbank.superwhisper-mode-sounds" >/dev/null 2>&1 || true
 
-echo "ensure-btt-f3: done"
+log "ensure-btt-f3: done"
