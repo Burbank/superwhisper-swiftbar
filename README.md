@@ -1,31 +1,29 @@
 # superwhisper-swiftbar
 
-A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](https://superwhisper.com) mode in the macOS menu bar.
+A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](https://superwhisper.com) mode in the macOS menu bar — and lets you switch modes with a click.
 
-If you use superwhisper with multiple modes — say, one per language — this gives you a persistent at-a-glance indicator of which mode is currently selected, right in the menu bar.
-
-![screenshot](screenshot.png)
+If you use superwhisper with multiple modes (e.g. one per language), this gives you a persistent at-a-glance indicator of which mode is currently selected, plus a quick way to switch.
 
 ## Features
 
-- Displays the active mode name (emoji, text, whatever you named it) in the menu bar
-- Click to see details: whisper model, language model, and all known modes
-- Updates every 2 seconds — mode switches appear almost instantly
-- Learns mode names automatically from your recording history
-- Zero configuration required
+- Displays the active mode name in the menu bar (emoji, text, whatever you named it)
+- Click to see all modes — click any inactive mode to switch to it instantly
+- Uses superwhisper's official `superwhisper://mode?key=` deep link API for real mode switching
+- Reads mode configs directly from `~/Documents/superwhisper/modes/*.json` — always in sync, no caching
+- Updates every 2 seconds
 
 ## How it works
 
-superwhisper stores an internal mode key (like `"default"`) in its preferences, but **not** the display name you assign in the UI. The plugin bridges this gap by watching the recording database: each time you dictate something, it maps the currently active internal key to the mode name from that recording. After one dictation per mode, all your mode names are learned and persist across restarts.
+superwhisper stores mode configurations as JSON files in `~/Documents/superwhisper/modes/`. Each file contains the mode's display name, internal key, language, and settings. The plugin reads these files, checks which mode is active via superwhisper's preferences, and renders the menu bar.
 
-Mapping cache is stored at `~/.cache/superwhisper-swiftbar/`.
+When you click an inactive mode in the dropdown, it opens the deep link `superwhisper://mode?key=MODE_KEY`, which tells superwhisper to switch modes through its official API.
 
 ## Requirements
 
 - macOS 13.3+
-- [superwhisper](https://superwhisper.com) installed
-- [SwiftBar](https://swiftbar.app) installed ([GitHub releases](https://github.com/swiftbar/SwiftBar/releases) or `brew install --cask swiftbar`)
-- `sqlite3` (ships with macOS)
+- [superwhisper](https://superwhisper.com) installed (v2.10+)
+- [SwiftBar](https://swiftbar.app) installed
+- `python3` (ships with macOS)
 
 ## Installation
 
@@ -35,7 +33,7 @@ Mapping cache is stored at `~/.cache/superwhisper-swiftbar/`.
    brew install --cask swiftbar
    ```
 
-   Or download directly from [GitHub releases](https://github.com/swiftbar/SwiftBar/releases/latest).
+   Or download from [GitHub releases](https://github.com/swiftbar/SwiftBar/releases/latest).
 
 2. **Launch SwiftBar** and choose a plugin directory when prompted (e.g. `~/Documents/swiftbar`).
 
@@ -47,17 +45,21 @@ Mapping cache is stored at `~/.cache/superwhisper-swiftbar/`.
    chmod +x "$(defaults read com.ameba.SwiftBar PluginDirectory)/superwhisper-mode.2s.sh"
    ```
 
-4. **SwiftBar picks it up automatically.** If not, click the SwiftBar icon and choose *Refresh All*.
-
-5. **Dictate once in each mode** so the plugin can learn the mapping between internal keys and your display names. After that, everything is automatic.
+4. SwiftBar picks it up automatically. If not, click the SwiftBar icon and choose **Refresh All**.
 
 ## Tip: name your modes with flag emoji
 
-If you use superwhisper for multiple languages, renaming your modes to flag emoji (🇺🇸, 🇳🇱, 🇪🇸, …) makes for a compact, instantly recognizable menu bar indicator.
+Renaming your superwhisper modes to flag emoji (🇺🇸, 🇳🇱, 🇪🇸, …) makes for a compact, instantly recognizable menu bar indicator that takes up minimal space.
 
 ## Refresh interval
 
-The filename `superwhisper-mode.2s.sh` tells SwiftBar to run the script every 2 seconds. You can rename the file to adjust — e.g. `superwhisper-mode.5s.sh` for every 5 seconds, or `superwhisper-mode.1s.sh` for every second.
+The filename `superwhisper-mode.2s.sh` tells SwiftBar to run the script every 2 seconds. Rename the file to adjust — e.g. `superwhisper-mode.5s.sh` for every 5 seconds.
+
+## Related
+
+- [superwhisper docs: Switching Modes](https://superwhisper.com/docs/modes/switching-modes)
+- [Raycast extension for superwhisper](https://www.raycast.com/nchudleigh/superwhisper)
+- [Alfred workflow for superwhisper](https://github.com/ognistik/alfred-superwhisper)
 
 ## License
 
