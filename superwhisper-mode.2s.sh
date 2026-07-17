@@ -6,7 +6,8 @@
 
 PREF_DOMAIN="com.superduper.superwhisper"
 MODES_DIR="$HOME/Documents/superwhisper/modes"
-SWITCH_SCRIPT="$HOME/Library/Application Support/superwhisper-swiftbar/switch-superwhisper-mode.sh"
+# Use space-free symlink — SwiftBar bash= breaks on "Application Support"
+SWITCH_SCRIPT="$HOME/.local/bin/switch-superwhisper-mode"
 
 active_key=$(/usr/bin/defaults read "$PREF_DOMAIN" activeModeKey 2>/dev/null)
 
@@ -64,7 +65,7 @@ while IFS='|' read -r key name lang; do
     if [ "$key" = "$active_key" ]; then
         echo "● $label | color=white"
     else
-        echo "○ $label | bash=$SWITCH_SCRIPT param1=$key terminal=false refresh=true"
+        echo "○ $label | bash=\"$SWITCH_SCRIPT\" param1=$key terminal=false refresh=true"
     fi
 done < "$TMPFILE"
 

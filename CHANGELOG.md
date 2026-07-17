@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-17 (path fix)
+
+- Use `~/.local/bin` symlinks so F3/SwiftBar switching works with Application Support paths
+
 ## 2026-07-17 (plugin folder cleanup)
 
 - Move sounds/helpers to Application Support so SwiftBar only loads real plugins

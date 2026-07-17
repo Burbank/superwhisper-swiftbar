@@ -119,6 +119,8 @@ Sounds, binaries, and helper scripts live in:
 
 If non-plugin files sit in the SwiftBar folder, they show up as broken `?` menu bar items.
 
+Hotkeys and SwiftBar actions should call space-free symlinks in `~/.local/bin/` (`cycle-superwhisper-mode`, `switch-superwhisper-mode`), because paths under `Application Support` break AppleScript/`bash=` on the space.
+
 ## Persistence across reboots
 
 Two LaunchAgents keep things working after restart:
