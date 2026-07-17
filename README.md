@@ -11,6 +11,7 @@ If you use superwhisper with multiple modes (e.g. one per language), this gives 
 - Uses superwhisper's official `superwhisper://mode?key=` deep link API for real mode switching
 - Reads mode configs directly from `~/Documents/superwhisper/modes/*.json` — always in sync, no caching
 - Updates every 2 seconds
+- Optional F3 toggle via BetterTouchTool to cycle through language modes
 
 ## How it works
 
@@ -50,6 +51,44 @@ When you click an inactive mode in the dropdown, it opens the deep link `superwh
 ## Tip: name your modes with flag emoji
 
 Renaming your superwhisper modes to flag emoji (🇺🇸, 🇳🇱, 🇪🇸, …) makes for a compact, instantly recognizable menu bar indicator that takes up minimal space.
+
+## Keyboard toggle (BetterTouchTool)
+
+`cycle-superwhisper-mode.sh` advances to the next mode in `~/Documents/superwhisper/modes/` (stable alphabetical order). With two modes it toggles; with three or more it cycles through all of them.
+
+### Setup in BetterTouchTool
+
+1. Install the cycle script next to the plugin (or anywhere you prefer):
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/cycle-superwhisper-mode.sh \
+     -o ~/Documents/swiftbar/cycle-superwhisper-mode.sh
+   chmod +x ~/Documents/swiftbar/cycle-superwhisper-mode.sh
+   ```
+
+2. Open **BetterTouchTool** → select **Keyboard Shortcuts** (left sidebar) under the **All Apps** / global section.
+3. Click **+** to add a new shortcut, then click **Click here to record shortcut** and press **F3**.
+4. Add an action: **Execute Shell Script / Task** (or **Run Apple Script (async)**).
+5. Point it at the script:
+
+   ```bash
+   /Users/YOUR_USERNAME/Documents/swiftbar/cycle-superwhisper-mode.sh
+   ```
+
+   Or as AppleScript:
+
+   ```applescript
+   do shell script "/Users/YOUR_USERNAME/Documents/swiftbar/cycle-superwhisper-mode.sh"
+   ```
+
+### Using F3 without holding Fn
+
+macOS treats F3 as Mission Control by default. Pick one:
+
+- **System Settings → Keyboard → Keyboard Shortcuts → Function Keys** → enable **Use F1, F2, etc. keys as standard function keys** (affects all F-keys; hold Fn for Mission Control / brightness / etc.), **or**
+- In **BetterTouchTool → Settings → Keyboard**, enable the option that remaps function keys to F1–F12 while BTT is running (wording varies by BTT version).
+
+Then record **F3** again in the BTT trigger if needed.
 
 ## Refresh interval
 
