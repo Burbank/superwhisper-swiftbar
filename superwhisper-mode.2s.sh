@@ -9,7 +9,7 @@
 PREF_DOMAIN="com.superduper.superwhisper"
 MODES_DIR="$HOME/Documents/superwhisper/modes"
 
-active_key=$(defaults read "$PREF_DOMAIN" activeModeKey 2>/dev/null)
+active_key=$(/usr/bin/defaults read "$PREF_DOMAIN" activeModeKey 2>/dev/null)
 
 if [ -z "$active_key" ]; then
     echo "SW?"
@@ -26,21 +26,26 @@ if [ ! -d "$MODES_DIR" ]; then
     exit 0
 fi
 
-# Parse all mode JSON files
+# Parse all mode JSON files (sorted for stable order)
 active_name=""
-TMPFILE=$(mktemp)
-trap "rm -f $TMPFILE" EXIT
+TMPFILE=$(/usr/bin/mktemp)
+trap '/bin/rm -f "$TMPFILE"' EXIT
 
-for f in "$MODES_DIR"/*.json; do
-    [ -f "$f" ] || continue
-    python3 -c "
-import json, sys
-m = json.load(open(sys.argv[1]))
-print(m['key'] + '|' + m['name'] + '|' + m.get('language', ''))
-" "$f" 2>/dev/null >> "$TMPFILE"
-done
+/usr/bin/python3 - "$MODES_DIR" <<'PY' > "$TMPFILE"
+import json, pathlib, sys
+modes_dir = pathlib.Path(sys.argv[1])
+for path in sorted(modes_dir.glob("*.json")):
+    try:
+        m = json.load(open(path))
+    except Exception:
+        continue
+    key = m.get("key") or ""
+    name = m.get("name") or key
+    lang = m.get("language") or ""
+    if key:
+        print(f"{key}|{name}|{lang}")
+PY
 
-# Find the active mode name for the menu bar
 while IFS='|' read -r key name lang; do
     [ -z "$key" ] && continue
     if [ "$key" = "$active_key" ]; then
@@ -64,7 +69,8 @@ while IFS='|' read -r key name lang; do
     if [ "$key" = "$active_key" ]; then
         echo "● $label | color=white"
     else
-        echo "○ $label | href=superwhisper://mode?key=$key"
+        # open -g keeps the current app focused while switching modes
+        echo "○ $label | bash=/usr/bin/open param1=-g param2=superwhisper://mode?key=$key terminal=false refresh=true"
     fi
 done < "$TMPFILE"
 

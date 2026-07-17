@@ -19,15 +19,24 @@ if [ ! -d "$MODES_DIR" ]; then
     exit 1
 fi
 
-# Remember whatever app currently has focus
+# Remember whatever app currently has focus (process name)
 front_app=$(/usr/bin/osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null || true)
 
 # Build ordered list of mode keys (stable sort by filename)
 keys=()
-while IFS= read -r f; do
-    key=$(/usr/bin/python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['key'])" "$f" 2>/dev/null) || continue
+while IFS= read -r key; do
     [ -n "$key" ] && keys+=("$key")
-done < <(/bin/ls -1 "$MODES_DIR"/*.json 2>/dev/null | /usr/bin/sort)
+done < <(/usr/bin/python3 - "$MODES_DIR" <<'PY'
+import json, pathlib, sys
+for path in sorted(pathlib.Path(sys.argv[1]).glob("*.json")):
+    try:
+        key = json.load(open(path)).get("key") or ""
+    except Exception:
+        continue
+    if key:
+        print(key)
+PY
+)
 
 if [ ${#keys[@]} -eq 0 ]; then
     echo "No modes found in $MODES_DIR" >&2
@@ -55,5 +64,5 @@ next_key="${keys[$next_index]}"
 
 # Restore focus if Superwhisper still stole it
 if [ -n "${front_app:-}" ] && [ "$front_app" != "superwhisper" ]; then
-    /usr/bin/osascript -e "tell application \"${front_app}\" to activate" 2>/dev/null || true
+    /usr/bin/osascript -e "tell application \"System Events\" to set frontmost of first process whose name is \"${front_app}\" to true" 2>/dev/null || true
 fi
