@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-17 (persistence)
+
+- Add login LaunchAgent `ensure-superwhisper-f3` to recreate/re-enable the BTT F3 shortcut after restarts
+
 ## 2026-07-17 (later)
 
 - Add `sounds/now_ES.wav` for future Spanish modes (`es` language / related keys)

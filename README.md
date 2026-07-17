@@ -106,6 +106,20 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
     Superwhisper Mode Sounds.app/
 ```
 
+
+
+## Persistence across reboots
+
+Two LaunchAgents keep things working after restart:
+
+1. **Superwhisper Mode Sounds** — preloads cue audio  
+2. **ensure-superwhisper-f3** — waits for BetterTouchTool, then recreates/re-enables the F3 shortcut if Dropbox sync or a restart disabled it
+
+They live under `~/Library/LaunchAgents/` and the ensure script under  
+`~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
+
+Also keep **Use F1, F2, etc. as standard function keys** enabled so bare F3 reaches BetterTouchTool.
+
 ## Related
 
 - [superwhisper docs: Switching Modes](https://superwhisper.com/docs/modes/switching-modes)
