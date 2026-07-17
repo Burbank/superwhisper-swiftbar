@@ -94,17 +94,29 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
 ## Layout
 
 ```
-~/Documents/swiftbar/
+~/Documents/swiftbar/                         # SwiftBar plugins ONLY
   superwhisper-mode.2s.sh
-  switch-superwhisper-mode.sh
+  001-ip-flag.2m.rb                           # optional other plugins
+  btc.5m.sh
+
+~/Library/Application Support/superwhisper-swiftbar/
   cycle-superwhisper-mode.sh
+  switch-superwhisper-mode.sh
+  ensure-btt-f3.sh
   sounds/
     now_US.wav
     now_NL.wav
-    play.fifo          # created at runtime by the sound agent
+    now_ES.wav
+    play.fifo                                 # runtime
   bin/
+    sound-server.swift
     Superwhisper Mode Sounds.app/
+
+~/.local/bin/
+  cycle-superwhisper-mode -> …/cycle-superwhisper-mode.sh
+  switch-superwhisper-mode -> …/switch-superwhisper-mode.sh
 ```
+
 
 
 
@@ -142,3 +154,20 @@ Also keep **Use F1, F2, etc. as standard function keys** enabled so bare F3 reac
 ## License
 
 MIT
+
+### Symlinks for hotkeys / SwiftBar actions
+
+Because `Application Support` contains a space, create space-free wrappers:
+
+```bash
+mkdir -p ~/.local/bin
+SUPPORT="$HOME/Library/Application Support/superwhisper-swiftbar"
+ln -sfn "$SUPPORT/cycle-superwhisper-mode.sh" ~/.local/bin/cycle-superwhisper-mode
+ln -sfn "$SUPPORT/switch-superwhisper-mode.sh" ~/.local/bin/switch-superwhisper-mode
+```
+
+Point BetterTouchTool at:
+
+```applescript
+do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
+```

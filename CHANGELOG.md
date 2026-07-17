@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-17 (summary)
+
+- SwiftBar plugin + click-to-switch + F3 cycle via BetterTouchTool
+- Instant mode cues via **Superwhisper Mode Sounds** background agent
+- Keep only real plugins in the SwiftBar folder; helpers/sounds live in Application Support
+- Use `~/.local/bin` symlinks so paths with spaces do not break switching
+- Login LaunchAgent recreates/re-enables the F3 shortcut after restarts
+
 ## 2026-07-17 (path fix)
 
 - Use `~/.local/bin` symlinks so F3/SwiftBar switching works with Application Support paths
