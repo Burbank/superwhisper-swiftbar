@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 
-let soundsDir = NSHomeDirectory() + "/Documents/swiftbar/sounds"
+let supportDir = NSHomeDirectory() + "/Library/Application Support/superwhisper-swiftbar"
+let soundsDir = supportDir + "/sounds"
 let fifoPath = soundsDir + "/play.fifo"
 
 func loadSound(_ name: String) -> NSSound? {
@@ -22,7 +23,6 @@ else {
     exit(1)
 }
 
-// Tokens can be mode keys (default/super/…) or language codes (en/nl/es)
 let sounds: [String: NSSound] = [
     "default": us,
     "en": us,

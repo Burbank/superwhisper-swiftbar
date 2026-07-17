@@ -6,11 +6,11 @@
 MODE_KEY="${1:-}"
 [ -n "$MODE_KEY" ] || { echo "Usage: $0 <mode-key>" >&2; exit 1; }
 
-SOUNDS_DIR="$HOME/Documents/swiftbar/sounds"
+SUPPORT="$HOME/Library/Application Support/superwhisper-swiftbar"
+SOUNDS_DIR="$SUPPORT/sounds"
 FIFO="$SOUNDS_DIR/play.fifo"
 MODES_DIR="$HOME/Documents/superwhisper/modes"
 
-# Resolve a sound token: known mode keys first, else mode language (en/nl/es/…)
 sound_token="$MODE_KEY"
 case "$MODE_KEY" in
     default|super) ;;
@@ -32,7 +32,6 @@ PY
         ;;
 esac
 
-# Fire the preloaded cue immediately (~1ms if sound-server is running)
 if [ -p "$FIFO" ]; then
     printf '%s\n' "$sound_token" > "$FIFO"
 else

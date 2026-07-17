@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-CYCLE="/Users/DuniaMBP/Documents/swiftbar/cycle-superwhisper-mode.sh"
+CYCLE="/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/cycle-superwhisper-mode.sh"
 UUID_FILE="/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/btt-f3-trigger-uuid"
 NOTE="Cycle Superwhisper language modes"
 ASCRIPT="do shell script \"${CYCLE}\""

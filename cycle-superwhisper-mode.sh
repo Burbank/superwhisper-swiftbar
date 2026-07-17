@@ -3,7 +3,7 @@
 # cycle-superwhisper-mode.sh — next Superwhisper mode (BetterTouchTool / F3)
 
 MODES_DIR="$HOME/Documents/superwhisper/modes"
-SWITCH="$HOME/Documents/swiftbar/switch-superwhisper-mode.sh"
+SWITCH="$HOME/Library/Application Support/superwhisper-swiftbar/switch-superwhisper-mode.sh"
 PREF_DOMAIN="com.superduper.superwhisper"
 
 [ -x "$SWITCH" ] || exit 1

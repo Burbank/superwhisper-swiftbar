@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-17 (plugin folder cleanup)
+
+- Move sounds/helpers to Application Support so SwiftBar only loads real plugins
+
 ## 2026-07-17 (persistence)
 
 - Add login LaunchAgent `ensure-superwhisper-f3` to recreate/re-enable the BTT F3 shortcut after restarts

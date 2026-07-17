@@ -4,7 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SWIFT="$ROOT/bin/sound-server.swift"
-PLUGIN_DIR="${SWIFTBAR_PLUGIN_DIR:-$HOME/Documents/swiftbar}"
+PLUGIN_DIR="${SWIFTBAR_SUPPORT_DIR:-$HOME/Library/Application Support/superwhisper-swiftbar}"
 APP="$PLUGIN_DIR/bin/Superwhisper Mode Sounds.app"
 BIN="$APP/Contents/MacOS/Superwhisper Mode Sounds"
 SOUNDS_DIR="$PLUGIN_DIR/sounds"
@@ -49,7 +49,7 @@ cat > "$APP/Contents/Info.plist" << PLIST
 PLIST
 
 # Point the compiled binary at the user's sounds dir via the expected path
-# (sound-server.swift reads ~/Documents/swiftbar/sounds)
+# (sound-server.swift reads ~/Library/Application Support/superwhisper-swiftbar/sounds)
 
 sed -e "s|__APP_EXECUTABLE__|${BIN}|g" \
     -e "s|__LOG_PATH__|${LOG}|g" \

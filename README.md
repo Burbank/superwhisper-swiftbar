@@ -108,6 +108,17 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
 
 
 
+
+## Important: keep the SwiftBar plugin folder clean
+
+Only put actual SwiftBar plugins in your SwiftBar plugin directory (e.g. `~/Documents/swiftbar`).
+
+Sounds, binaries, and helper scripts live in:
+
+`~/Library/Application Support/superwhisper-swiftbar/`
+
+If non-plugin files sit in the SwiftBar folder, they show up as broken `?` menu bar items.
+
 ## Persistence across reboots
 
 Two LaunchAgents keep things working after restart:

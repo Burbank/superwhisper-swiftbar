@@ -3,12 +3,10 @@
 # superwhisper-mode.2s.sh — SwiftBar plugin
 # Reads mode configs from ~/Documents/superwhisper/modes/*.json
 # Switches modes via switch-superwhisper-mode.sh (deep link + sound cue)
-#
-# https://superwhisper.com · https://swiftbar.app
 
 PREF_DOMAIN="com.superduper.superwhisper"
 MODES_DIR="$HOME/Documents/superwhisper/modes"
-SWITCH_SCRIPT="$HOME/Documents/swiftbar/switch-superwhisper-mode.sh"
+SWITCH_SCRIPT="$HOME/Library/Application Support/superwhisper-swiftbar/switch-superwhisper-mode.sh"
 
 active_key=$(/usr/bin/defaults read "$PREF_DOMAIN" activeModeKey 2>/dev/null)
 
