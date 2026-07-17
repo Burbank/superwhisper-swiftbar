@@ -1,99 +1,115 @@
 # superwhisper-swiftbar
 
-A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](https://superwhisper.com) mode in the macOS menu bar — and lets you switch modes with a click or a keyboard shortcut.
-
-If you use superwhisper with multiple modes (e.g. one per language), this gives you a persistent at-a-glance indicator of which mode is currently selected, plus a quick way to switch without interrupting dictation.
+A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](https://superwhisper.com) mode in the macOS menu bar, lets you switch modes with a click or keyboard shortcut, and plays an instant audio cue so you can tell which language mode is active without looking.
 
 ## Features
 
-- Displays the active mode name in the menu bar (emoji, text, whatever you named it)
-- Click any inactive mode in the dropdown to switch instantly
-- Optional keyboard cycle script for BetterTouchTool (e.g. F3)
-- Uses superwhisper's official `superwhisper://mode?key=` deep link API
-- Reads mode configs from `~/Documents/superwhisper/modes/*.json` — always in sync
-- Mode switches use `open -g` so your current app stays focused
-- Updates every 2 seconds
+- Menu bar shows the active mode name (flag emoji, text, etc.)
+- Click any inactive mode in the dropdown to switch
+- Optional F3 (or any key) cycle via BetterTouchTool
+- Official `superwhisper://mode?key=` deep links for real mode switching
+- Reads modes from `~/Documents/superwhisper/modes/*.json` — always in sync
+- Keeps your current app focused (`open -g`)
+- Instant language cues via a background **Superwhisper Mode Sounds** agent (preloaded WAVs)
 
 ## How it works
 
-superwhisper stores mode configurations as JSON files in `~/Documents/superwhisper/modes/`. Each file contains the mode's display name, internal key, language, and settings. The plugin reads these files, checks which mode is active via superwhisper's preferences, and renders the menu bar.
+| Piece | Role |
+| --- | --- |
+| `superwhisper-mode.2s.sh` | SwiftBar plugin — display + click-to-switch |
+| `switch-superwhisper-mode.sh` | Plays cue + switches mode without stealing focus |
+| `cycle-superwhisper-mode.sh` | Advances to the next mode (for BTT / hotkeys) |
+| `bin/sound-server.swift` | Preloads `now_US.wav` / `now_NL.wav`, plays on FIFO command |
+| LaunchAgent | Keeps **Superwhisper Mode Sounds** running in the background |
 
-Switching opens `superwhisper://mode?key=MODE_KEY` in the background (`open -g`), so Superwhisper changes mode without coming to the foreground.
+Cue mapping (mode key → sound):
+
+| Mode key | Sound |
+| --- | --- |
+| `default` (English / 🇺🇸) | `sounds/now_US.wav` |
+| `super` (Dutch / 🇳🇱) | `sounds/now_NL.wav` |
 
 ## Requirements
 
 - macOS 13.3+
-- [superwhisper](https://superwhisper.com) installed (v2.10+)
-- [SwiftBar](https://swiftbar.app) installed
+- [superwhisper](https://superwhisper.com) (v2.10+)
+- [SwiftBar](https://swiftbar.app)
+- Xcode Command Line Tools / `swiftc` (only to build the sound agent)
 - `python3` (ships with macOS)
 
 ## Installation
 
-1. **Install SwiftBar** if you haven't already:
+### 1. SwiftBar plugin
 
-   ```bash
-   brew install --cask swiftbar
-   ```
+```bash
+PLUGIN_DIR="${HOME}/Documents/swiftbar"
+mkdir -p "$PLUGIN_DIR"
+# Point SwiftBar at this folder in its preferences if needed
 
-   Or download from [GitHub releases](https://github.com/swiftbar/SwiftBar/releases/latest).
+curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/superwhisper-mode.2s.sh \
+  -o "$PLUGIN_DIR/superwhisper-mode.2s.sh"
+curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/switch-superwhisper-mode.sh \
+  -o "$PLUGIN_DIR/switch-superwhisper-mode.sh"
+curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/cycle-superwhisper-mode.sh \
+  -o "$PLUGIN_DIR/cycle-superwhisper-mode.sh"
+chmod +x "$PLUGIN_DIR"/*.sh
 
-2. **Launch SwiftBar** and choose a plugin directory when prompted (e.g. `~/Documents/swiftbar`).
+# Hide helper scripts from the menu bar
+defaults write com.ameba.SwiftBar DisabledPlugins -array \
+  "cycle-superwhisper-mode.sh" \
+  "switch-superwhisper-mode.sh"
+```
 
-3. **Copy the plugin** into your SwiftBar plugin directory:
+Or clone the repo and copy the scripts into your SwiftBar plugin directory.
 
-   ```bash
-   PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory)"
-   curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/superwhisper-mode.2s.sh \
-     -o "$PLUGIN_DIR/superwhisper-mode.2s.sh"
-   chmod +x "$PLUGIN_DIR/superwhisper-mode.2s.sh"
-   ```
+### 2. Sound cues + background agent
 
-4. SwiftBar picks it up automatically. If not, click the SwiftBar icon and choose **Refresh All**.
+```bash
+git clone https://github.com/Burbank/superwhisper-swiftbar.git
+cd superwhisper-swiftbar
+./bin/install-sound-server.sh
+```
 
-## Tip: name your modes with flag emoji
+This compiles the agent, installs sounds into `~/Documents/swiftbar/sounds/`, and registers a LaunchAgent. In **System Settings → General → Login Items & Extensions → Allow in the Background** it appears as **Superwhisper Mode Sounds**.
 
-Renaming your superwhisper modes to flag emoji (🇺🇸, 🇳🇱, 🇪🇸, …) makes for a compact, instantly recognizable menu bar indicator.
+Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you like, then re-run the install script (or restart the agent).
 
-## Keyboard toggle (BetterTouchTool)
+### 3. BetterTouchTool (optional keyboard toggle)
 
-`cycle-superwhisper-mode.sh` advances to the next mode in `~/Documents/superwhisper/modes/` (stable alphabetical order by filename). With two modes it toggles; with three or more it cycles through all of them. Focus stays on the app you were using.
-
-### Setup in BetterTouchTool
-
-1. Install the cycle script:
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/Burbank/superwhisper-swiftbar/main/cycle-superwhisper-mode.sh \
-     -o ~/Documents/swiftbar/cycle-superwhisper-mode.sh
-   chmod +x ~/Documents/swiftbar/cycle-superwhisper-mode.sh
-   ```
-
-2. Open **BetterTouchTool** → **Keyboard Shortcuts** under **All Apps**.
-3. If F3 already does something else (e.g. **Show Desktop**), edit that trigger instead of adding a second one.
-4. Set the action to **Run Apple Script (async)** (or **Execute Shell Script / Task**):
+1. Add a global keyboard shortcut (e.g. **F3**).
+2. If F3 already triggers **Show Desktop**, edit that trigger instead of adding a second one.
+3. Action → **Run Apple Script (async)**:
 
    ```applescript
    do shell script "/Users/YOUR_USERNAME/Documents/swiftbar/cycle-superwhisper-mode.sh"
    ```
 
-### Using F3 without holding Fn
+4. For F3 without holding Fn: enable **Use F1, F2, etc. keys as standard function keys** in System Settings, or remap function keys in BTT.
 
-macOS often maps bare F3 to Mission Control / Show Desktop. Options:
+## Tip: flag emoji mode names
 
-- **System Settings → Keyboard → Keyboard Shortcuts → Function Keys** → enable **Use F1, F2, etc. keys as standard function keys**, **or**
-- Remap function keys in BetterTouchTool's keyboard settings
+Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu bar indicator.
 
-Also make sure no second F3 trigger is still bound to Show Desktop / Mission Control.
+## Layout
 
-## Refresh interval
-
-The filename `superwhisper-mode.2s.sh` tells SwiftBar to run the script every 2 seconds. Rename it to adjust — e.g. `superwhisper-mode.5s.sh`.
+```
+~/Documents/swiftbar/
+  superwhisper-mode.2s.sh
+  switch-superwhisper-mode.sh
+  cycle-superwhisper-mode.sh
+  sounds/
+    now_US.wav
+    now_NL.wav
+    play.fifo          # created at runtime by the sound agent
+  bin/
+    Superwhisper Mode Sounds.app/
+```
 
 ## Related
 
 - [superwhisper docs: Switching Modes](https://superwhisper.com/docs/modes/switching-modes)
-- [Raycast extension for superwhisper](https://www.raycast.com/nchudleigh/superwhisper)
-- [Alfred workflow for superwhisper](https://github.com/ognistik/alfred-superwhisper)
+- [Raycast extension](https://www.raycast.com/nchudleigh/superwhisper)
+- [Alfred workflow](https://github.com/ognistik/alfred-superwhisper)
 
 ## License
 

@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+play.fifo
+bin/sound-server
+bin/playsound
+bin/Superwhisper Mode Sounds.app/

@@ -2,12 +2,13 @@
 
 # superwhisper-mode.2s.sh — SwiftBar plugin
 # Reads mode configs from ~/Documents/superwhisper/modes/*.json
-# Switches modes via superwhisper://mode?key=MODE_KEY deep link
+# Switches modes via switch-superwhisper-mode.sh (deep link + sound cue)
 #
 # https://superwhisper.com · https://swiftbar.app
 
 PREF_DOMAIN="com.superduper.superwhisper"
 MODES_DIR="$HOME/Documents/superwhisper/modes"
+SWITCH_SCRIPT="$HOME/Documents/swiftbar/switch-superwhisper-mode.sh"
 
 active_key=$(/usr/bin/defaults read "$PREF_DOMAIN" activeModeKey 2>/dev/null)
 
@@ -26,7 +27,6 @@ if [ ! -d "$MODES_DIR" ]; then
     exit 0
 fi
 
-# Parse all mode JSON files (sorted for stable order)
 active_name=""
 TMPFILE=$(/usr/bin/mktemp)
 trap '/bin/rm -f "$TMPFILE"' EXIT
@@ -56,10 +56,7 @@ done < "$TMPFILE"
 
 [ -z "$active_name" ] && active_name="$active_key"
 
-# Menu bar: mode name only
 echo "$active_name"
-
-# Dropdown
 echo "---"
 
 while IFS='|' read -r key name lang; do
@@ -69,8 +66,7 @@ while IFS='|' read -r key name lang; do
     if [ "$key" = "$active_key" ]; then
         echo "● $label | color=white"
     else
-        # open -g keeps the current app focused while switching modes
-        echo "○ $label | bash=/usr/bin/open param1=-g param2=superwhisper://mode?key=$key terminal=false refresh=true"
+        echo "○ $label | bash=$SWITCH_SCRIPT param1=$key terminal=false refresh=true"
     fi
 done < "$TMPFILE"
 
