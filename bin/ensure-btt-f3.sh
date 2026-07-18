@@ -1,20 +1,26 @@
 #!/bin/bash
 
 # ensure-btt-f3.sh
-# Ensures the Superwhisper F3 BetterTouchTool shortcut exists and is enabled.
-# Runs at login (LaunchAgent) and hourly as a safety net.
+# Keeps exactly ONE Superwhisper F3 BetterTouchTool shortcut.
+# Deletes duplicates first so it never piles up triggers.
 
 set -euo pipefail
 
-# Space-free symlink — AppleScript do shell script splits on spaces otherwise
 CYCLE="/Users/DuniaMBP/.local/bin/cycle-superwhisper-mode"
 UUID_FILE="/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/btt-f3-trigger-uuid"
+LOCK_FILE="/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/ensure-btt-f3.lock"
 NOTE="Cycle Superwhisper language modes"
 ASCRIPT="do shell script \"${CYCLE}\""
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
-# Wait for BetterTouchTool (up to ~90s after login)
+# Prevent overlapping runs
+if ! /usr/bin/mkdir "$LOCK_FILE" 2>/dev/null; then
+    log "another ensure run is in progress; exiting"
+    exit 0
+fi
+trap '/bin/rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
+
 for _ in $(seq 1 90); do
     if pgrep -x BetterTouchTool >/dev/null 2>&1; then
         break
@@ -27,8 +33,8 @@ if ! pgrep -x BetterTouchTool >/dev/null 2>&1; then
     exit 1
 fi
 
-# Allow BTT to finish launching / cloud sync
-sleep 5
+# Let BTT finish launching / syncing
+sleep 8
 
 /usr/bin/python3 - "$CYCLE" "$UUID_FILE" "$NOTE" "$ASCRIPT" <<'PY'
 import json, subprocess, sys, uuid
@@ -36,26 +42,36 @@ from pathlib import Path
 
 cycle, uuid_file, note, ascript = sys.argv[1:5]
 
-def osa(*args, timeout=20):
+def osa(*args, timeout=45):
     return subprocess.run(
         ["osascript", *args],
         capture_output=True, text=True, timeout=timeout,
     )
 
-def get_trigger(uid):
+def get_keyboard_triggers():
     try:
-        r = osa("-e", f'tell application "BetterTouchTool" to get_triggers trigger_uuid "{uid}"', timeout=15)
+        r = osa(
+            "-e",
+            'tell application "BetterTouchTool" to get_triggers trigger_type "BTTTriggerTypeKeyboardShortcut"',
+            timeout=45,
+        )
     except subprocess.TimeoutExpired:
+        print("warning: listing triggers timed out")
         return None
     if r.returncode != 0 or not r.stdout.strip():
+        print("warning: listing triggers failed:", (r.stderr or "")[:200])
         return None
     try:
-        data = json.loads(r.stdout)
+        return json.loads(r.stdout)
     except json.JSONDecodeError:
         return None
-    if isinstance(data, list) and data:
-        return data[0]
-    return None
+
+def delete_trigger(uid):
+    try:
+        osa("-e", f'tell application "BetterTouchTool" to delete_trigger "{uid}"', timeout=15)
+        print(f"deleted {uid}")
+    except subprocess.TimeoutExpired:
+        print(f"warning: delete timed out for {uid}")
 
 def add_trigger(payload):
     r = osa(
@@ -108,23 +124,56 @@ payload = {
     "BTTInlineAppleScript": ascript,
 }
 
+triggers = get_keyboard_triggers()
+if triggers is None:
+    # Do NOT create anything if we cannot list — avoids duplicate storms
+    print("abort: could not list triggers; not creating")
+    sys.exit(1)
+
+matches = []
+for t in triggers:
+    script = t.get("BTTInlineAppleScript") or ""
+    notes = str(t.get("BTTNotes") or "") + str(t.get("BTTLayoutIndependentChar") or "")
+    kc = t.get("BTTShortcutKeyCode")
+    if (
+        "cycle-superwhisper-mode" in script
+        or "Cycle Superwhisper" in notes
+        or (kc == 99 and "cycle-superwhisper" in script)
+    ):
+        matches.append(t)
+
+print(f"found {len(matches)} matching F3/cycle trigger(s)")
+
 keep_uuid = None
 saved = Path(uuid_file)
-if saved.exists():
-    candidate = saved.read_text().strip()
-    if candidate:
-        existing = get_trigger(candidate)
-        if existing and "cycle-superwhisper-mode.sh" in (existing.get("BTTInlineAppleScript") or ""):
-            keep_uuid = candidate
-            print(f"found saved {keep_uuid}")
+saved_uuid = saved.read_text().strip() if saved.exists() else ""
+
+# Prefer saved UUID if it still exists among matches
+for t in matches:
+    if t.get("BTTUUID") == saved_uuid:
+        keep_uuid = saved_uuid
+        break
+
+# Else keep the newest match
+if keep_uuid is None and matches:
+    keep_uuid = sorted(matches, key=lambda t: t.get("BTTLastUpdatedAt") or 0, reverse=True)[0]["BTTUUID"]
+
+# Delete every match except the one we keep
+for t in matches:
+    uid = t["BTTUUID"]
+    if keep_uuid and uid == keep_uuid:
+        continue
+    delete_trigger(uid)
 
 if keep_uuid is None:
     new_uuid = str(uuid.uuid4()).upper()
-    payload_create = dict(payload)
-    payload_create["BTTUUID"] = new_uuid
-    created = add_trigger(payload_create)
+    create_payload = dict(payload)
+    create_payload["BTTUUID"] = new_uuid
+    created = add_trigger(create_payload)
     keep_uuid = created or new_uuid
     print(f"created {keep_uuid}")
+else:
+    print(f"keeping {keep_uuid}")
 
 if update_trigger(keep_uuid, payload):
     print(f"enabled {keep_uuid}")

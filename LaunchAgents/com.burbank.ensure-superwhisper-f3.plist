@@ -11,8 +11,6 @@
   </array>
   <key>RunAtLoad</key>
   <true/>
-  <key>StartInterval</key>
-  <integer>3600</integer>
   <key>StandardOutPath</key>
   <string>/Users/DuniaMBP/Library/Application Support/superwhisper-swiftbar/ensure-btt-f3.log</string>
   <key>StandardErrorPath</key>
