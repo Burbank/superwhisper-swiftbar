@@ -75,19 +75,29 @@ This compiles the agent, installs sounds into `~/Documents/swiftbar/sounds/`, an
 
 Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you like, then re-run the install script (or restart the agent).
 
-### 3. BetterTouchTool (optional keyboard toggle)
+### 3. Keyboard toggle (F3) without breaking volume keys
 
-1. Add a global keyboard shortcut (e.g. **F3**).
-2. If F3 already triggers **Show Desktop**, edit that trigger instead of adding a second one.
-3. Action → **Run Apple Script (async)**:
+macOS cannot make only F3 a standard function key. Recommended setup:
 
-   ```applescript
-   do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
+1. Leave **Use F1, F2, etc. keys as standard function keys** **off** so volume / brightness stay on the top row.
+2. Use [Karabiner-Elements](https://karabiner-elements.pqrs.org) to map the physical **Mission Control** key (the F3 keycap in media-key mode) to the cycle script:
+
+   ```json
+   {
+     "description": "Mission Control key (F3) → cycle superwhisper modes",
+     "manipulators": [
+       {
+         "type": "basic",
+         "from": { "key_code": "mission_control", "modifiers": { "optional": ["any"] } },
+         "to": [{ "shell_command": "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode" }]
+       }
+     ]
+   }
    ```
 
-4. For F3 without holding Fn: enable **Use F1, F2, etc. keys as standard function keys** in System Settings, or remap function keys in BTT.
+3. Do **not** also bind the same action to a BetterTouchTool F3 shortcut, or both may fire.
 
-**Keep BTT sync off.** Dropbox and iCloud sync can overwrite or duplicate local shortcuts (including F3). For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool` instead of enabling live sync.
+**Keep BTT sync off** if you still use BTT for other things. Dropbox/iCloud sync can overwrite local shortcuts. For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool`.
 
 ## Tip: flag emoji mode names
 
@@ -145,7 +155,7 @@ Two LaunchAgents keep things working after restart:
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
 
-Also keep **Use F1, F2, etc. as standard function keys** enabled so bare F3 reaches BetterTouchTool, and leave BTT Dropbox/iCloud sync disabled so cloud presets cannot clobber the local F3 shortcut.
+Prefer media-key mode (standard function keys **off**) plus Karabiner’s Mission Control → cycle mapping so volume keys stay normal. Leave BTT Dropbox/iCloud sync disabled.
 
 ## Related
 

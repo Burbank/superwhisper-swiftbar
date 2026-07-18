@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # ensure-btt-f3.sh
-# Keeps exactly ONE Superwhisper F3 BetterTouchTool shortcut.
-# Deletes duplicates first so it never piles up triggers.
+# Legacy helper. Preferred setup: Karabiner maps Mission Control (physical F3 in
+# media-key mode) to cycle-superwhisper-mode, with macOS fnState=false so volume
+# keys stay normal. This script only dedupes/disables the old BTT F3 shortcut.
 
 set -euo pipefail
 
@@ -117,8 +118,8 @@ end run
 payload = {
     "BTTTriggerClass": "BTTTriggerTypeKeyboardShortcut",
     "BTTTriggerType": 0,
-    "BTTEnabled": 1,
-    "BTTEnabled2": 1,
+    "BTTEnabled": 0,
+    "BTTEnabled2": 0,
     "BTTShortcutKeyCode": 99,
     "BTTShortcutModifierKeys": 8388608,
     "BTTShortcutAdvancedModifierKeys": "8388608",
@@ -191,7 +192,8 @@ saved.parent.mkdir(parents=True, exist_ok=True)
 saved.write_text(keep_uuid + "\n")
 PY
 
-/usr/bin/defaults write -g com.apple.keyboard.fnState -bool true
+# Keep media keys (volume etc.). Mission Control / F3 is handled by Karabiner.
+/usr/bin/defaults write -g com.apple.keyboard.fnState -bool false
 /bin/launchctl kickstart -k "gui/$(id -u)/com.burbank.superwhisper-mode-sounds" >/dev/null 2>&1 || true
 
 log "ensure-btt-f3: done"

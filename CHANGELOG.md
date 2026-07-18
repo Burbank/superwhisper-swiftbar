@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-18 (media keys + F3)
+
+- Restore normal media keys (volume etc.) by setting `com.apple.keyboard.fnState` off
+- Map physical F3 / Mission Control → cycle modes via Karabiner (`mission_control` → `~/.local/bin/cycle-superwhisper-mode`)
+- Disable the old BetterTouchTool F3 shortcut so it does not conflict
+- Leave other function-row media keys unchanged
+
 ## 2026-07-18 (BTT sync)
 
 - Leave BetterTouchTool Dropbox and iCloud sync off to avoid cloud/local preset conflicts overwriting the F3 shortcut
