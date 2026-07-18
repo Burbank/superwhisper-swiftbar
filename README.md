@@ -86,12 +86,15 @@ macOS cannot make only F3 a standard function key. Use BetterTouchTool only (no 
    do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
    ```
 
-3. Because step 1 would otherwise break volume/brightness, also add BTT shortcuts that restore them:
-   - **F1** → Brightness Down  
-   - **F2** → Brightness Up  
-   - **F10** → Mute  
-   - **F11** → Volume Down  
-   - **F12** → Volume Up  
+3. Because step 1 would otherwise break the media row, also add BTT shortcuts for the standard Apple keys (everything except F3):
+   - **F1 / F2** → Brightness down / up  
+   - **F4** → Spotlight (⌘Space)  
+   - **F5** → Dictation  
+   - **F6** → Do Not Disturb / Focus  
+   - **F7 / F8 / F9** → Previous / Play-Pause / Next  
+   - **F10 / F11 / F12** → Mute / Volume down / up  
+
+4. Disable macOS **Show Desktop** on F11 (System Settings → Keyboard → Keyboard Shortcuts → Mission Control), or let `ensure-btt-f3.sh` turn off symbolic hotkeys 36/37 — otherwise F11 never reaches BTT’s Volume Down.
 
 `bin/ensure-btt-f3.sh` can recreate that set (optional; LaunchAgent left disabled by default).
 

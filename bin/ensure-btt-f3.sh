@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ensure-btt-f3.sh
-# Keeps ONE BTT F3 shortcut (keycode 99) for cycling Superwhisper modes.
-# Also keeps BTT media remaps (F11/F12 volume, F1/F2 brightness, F10 mute)
-# so those keys still work while macOS uses standard function keys
-# (needed for bare F3). Deletes Superwhisper-related duplicates first.
+# Keeps ONE BTT F3 shortcut for cycling Superwhisper modes, plus a full
+# standard Apple media-key row on F1–F2/F4–F12 (F3 stays custom).
+# Also disables macOS "Show Desktop" on F11 so Volume Down can work.
+# Deletes Superwhisper-related duplicates first.
 
 set -euo pipefail
 
@@ -45,6 +45,34 @@ fi
 
 sleep 8
 
+# Free F11 from macOS Show Desktop (symbolic hotkeys 36/37)
+/usr/bin/python3 - <<'PY2'
+import plistlib, subprocess, tempfile
+from pathlib import Path
+fd, name = tempfile.mkstemp(suffix=".plist")
+path = Path(name)
+subprocess.check_call(["defaults", "export", "com.apple.symbolichotkeys", str(path)])
+pl = plistlib.loads(path.read_bytes())
+keys = pl.get("AppleSymbolicHotKeys", {})
+changed = False
+for n in (36, 37):
+    entry = keys.get(n) or keys.get(str(n))
+    if isinstance(entry, dict) and entry.get("enabled", False):
+        entry["enabled"] = False
+        keys[n] = entry
+        changed = True
+if changed:
+    pl["AppleSymbolicHotKeys"] = keys
+    path.write_bytes(plistlib.dumps(pl))
+    subprocess.check_call(["defaults", "import", "com.apple.symbolichotkeys", str(path)])
+    subprocess.run(
+        ["/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings", "-u"],
+        check=False,
+    )
+print("show-desktop-f11: disabled" if changed else "show-desktop-f11: already off")
+path.unlink(missing_ok=True)
+PY2
+
 /usr/bin/python3 - "$CYCLE" "$UUID_FILE" "$MEDIA_UUID_FILE" "$NOTE" "$ASCRIPT" <<'PY'
 import json, subprocess, sys, uuid
 from pathlib import Path
@@ -58,10 +86,8 @@ def get_keyboard_triggers():
     try:
         r = osa("-e", 'tell application "BetterTouchTool" to get_triggers trigger_type "BTTTriggerTypeKeyboardShortcut"', timeout=45)
     except subprocess.TimeoutExpired:
-        print("warning: listing triggers timed out")
         return None
     if r.returncode != 0 or not r.stdout.strip():
-        print("warning: listing triggers failed:", (r.stderr or "")[:200])
         return None
     try:
         return json.loads(r.stdout)
@@ -73,7 +99,7 @@ def delete_trigger(uid):
         osa("-e", f'tell application "BetterTouchTool" to delete_trigger "{uid}"', timeout=15)
         print(f"deleted {uid}")
     except subprocess.TimeoutExpired:
-        print(f"warning: delete timed out for {uid}")
+        pass
 
 def add_trigger(payload):
     r = osa(
@@ -114,12 +140,19 @@ f3_payload = {
     "BTTInlineAppleScript": ascript,
 }
 
+# Apple-standard media row (F3 excluded — custom cycle)
 media_defs = [
-    ("f1", 122, 29, "Brightness Down", "Superwhisper media: Brightness Down"),
-    ("f2", 120, 28, "Brightness Up", "Superwhisper media: Brightness Up"),
-    ("f10", 109, 22, "Mute", "Superwhisper media: Mute"),
-    ("f11", 103, 25, "Volume Down", "Superwhisper media: Volume Down"),
-    ("f12", 111, 24, "Volume Up", "Superwhisper media: Volume Up"),
+    ("f1", 122, 29, "Brightness Down", None),
+    ("f2", 120, 28, "Brightness Up", None),
+    ("f4", 118, 264, "Send Keyboard Shortcut", "55,49"),  # Spotlight
+    ("f5", 96, 576, "Start Dictation / Speech Recognition", None),
+    ("f6", 97, 200, "Toggle Do Not Disturb", None),
+    ("f7", 98, 26, "Previous Track", None),
+    ("f8", 100, 23, "Play/Pause", None),
+    ("f9", 101, 27, "Next Track", None),
+    ("f10", 109, 22, "Mute", None),
+    ("f11", 103, 25, "Volume Down", None),
+    ("f12", 111, 24, "Volume Up", None),
 ]
 
 triggers = get_keyboard_triggers()
@@ -133,13 +166,11 @@ for t in triggers:
     script = t.get("BTTInlineAppleScript") or ""
     notes = str(t.get("BTTNotes") or "") + str(t.get("BTTLayoutIndependentChar") or "")
     kc = t.get("BTTShortcutKeyCode")
-    if "cycle-superwhisper-mode" in script or "Cycle Superwhisper" in notes or (kc in (99, 160) and "cycle-superwhisper" in script):
+    if "cycle-superwhisper-mode" in script or "Cycle Superwhisper" in notes:
         matches.append(t)
     for key, mkc, *_rest in media_defs:
-        if f"Superwhisper media:" in notes and kc == mkc:
+        if notes.startswith("Superwhisper media:") and kc == mkc:
             media_matches[key].append(t)
-
-print(f"found {len(matches)} matching F3/cycle trigger(s)")
 
 keep_uuid = None
 saved = Path(uuid_file)
@@ -166,12 +197,10 @@ if keep_uuid is None:
     print(f"created {keep_uuid}")
 else:
     print(f"keeping {keep_uuid}")
-
 update_trigger(keep_uuid, f3_payload)
 saved.parent.mkdir(parents=True, exist_ok=True)
 saved.write_text(keep_uuid + "\n")
 
-# Media remaps
 saved_media = {}
 if Path(media_uuid_file).exists():
     try:
@@ -180,7 +209,7 @@ if Path(media_uuid_file).exists():
         saved_media = {}
 
 out_media = {}
-for key, kc, action, action_name, mnote in media_defs:
+for key, kc, action, action_name, shortcut_to_send in media_defs:
     keep = None
     saved_uid = saved_media.get(key)
     for t in media_matches[key]:
@@ -193,6 +222,8 @@ for key, kc, action, action_name, mnote in media_defs:
         if keep and t["BTTUUID"] == keep:
             continue
         delete_trigger(t["BTTUUID"])
+    label = "Spotlight" if action == 264 else action_name
+    note = f"Superwhisper media: {label}"
     payload = {
         "BTTTriggerClass": "BTTTriggerTypeKeyboardShortcut",
         "BTTTriggerType": 0,
@@ -203,11 +234,14 @@ for key, kc, action, action_name, mnote in media_defs:
         "BTTShortcutAdvancedModifierKeys": "8388608",
         "BTTAdditionalConfiguration": "8388608",
         "BTTTriggerOnDown": 1,
-        "BTTNotes": mnote,
-        "BTTLayoutIndependentChar": mnote,
+        "BTTNotes": note,
+        "BTTLayoutIndependentChar": note,
         "BTTPredefinedActionType": action,
         "BTTPredefinedActionName": action_name,
+        "BTTTriggerConfig": {"BTTTriggerOnRepeat": True},
     }
+    if shortcut_to_send:
+        payload["BTTShortcutToSend"] = shortcut_to_send
     if keep is None:
         new_uuid = str(uuid.uuid4()).upper()
         payload["BTTUUID"] = new_uuid
@@ -223,7 +257,6 @@ Path(media_uuid_file).write_text(json.dumps(out_media, indent=2) + "\n")
 print("ensure media+f3 done")
 PY
 
-# Bare F3 requires standard function keys; BTT remaps restore volume/brightness.
 /usr/bin/defaults write -g com.apple.keyboard.fnState -bool true
 /bin/launchctl kickstart -k "gui/$(id -u)/com.burbank.superwhisper-mode-sounds" >/dev/null 2>&1 || true
 

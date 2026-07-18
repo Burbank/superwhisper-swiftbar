@@ -4,7 +4,8 @@
 
 - Fix broken Mission Control keycode-160 binding (physical F3 never matched)
 - Restore working BTT **F3** (keycode 99) + `fnState` on for bare F3
-- Add BTT remaps for F1/F2/F10/F11/F12 so brightness/mute/volume work without Fn
+- Bind full Apple media row in BTT (F1–F2, F4–F12); only F3 is custom
+- Disable macOS Show Desktop on F11 (symbolic hotkeys 36/37) so Volume Down works
 - Keep Karabiner out of this path (Apple keyboards ignored; no superwhisper rule)
 
 ## 2026-07-18 (BTT sync)
