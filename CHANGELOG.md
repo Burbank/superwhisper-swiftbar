@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-18 (BTT sync)
+
+- Leave BetterTouchTool Dropbox and iCloud sync off to avoid cloud/local preset conflicts overwriting the F3 shortcut
+- Prefer local BTT config + manual preset export over live cloud sync
+
 ## 2026-07-18 (hotfix)
 
 - Remove 17 duplicate F3 triggers caused by hourly ensure agent

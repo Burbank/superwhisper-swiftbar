@@ -82,10 +82,12 @@ Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you li
 3. Action → **Run Apple Script (async)**:
 
    ```applescript
-   do shell script "/Users/YOUR_USERNAME/Documents/swiftbar/cycle-superwhisper-mode.sh"
+   do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
    ```
 
 4. For F3 without holding Fn: enable **Use F1, F2, etc. keys as standard function keys** in System Settings, or remap function keys in BTT.
+
+**Keep BTT sync off.** Dropbox and iCloud sync can overwrite or duplicate local shortcuts (including F3). For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool` instead of enabling live sync.
 
 ## Tip: flag emoji mode names
 
@@ -143,7 +145,7 @@ Two LaunchAgents keep things working after restart:
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
 
-Also keep **Use F1, F2, etc. as standard function keys** enabled so bare F3 reaches BetterTouchTool.
+Also keep **Use F1, F2, etc. as standard function keys** enabled so bare F3 reaches BetterTouchTool, and leave BTT Dropbox/iCloud sync disabled so cloud presets cannot clobber the local F3 shortcut.
 
 ## Related
 
