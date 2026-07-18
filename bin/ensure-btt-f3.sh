@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # ensure-btt-f3.sh
-# Legacy helper. Preferred setup: Karabiner maps Mission Control (physical F3 in
-# media-key mode) to cycle-superwhisper-mode, with macOS fnState=false so volume
-# keys stay normal. This script only dedupes/disables the old BTT F3 shortcut.
+# Keeps ONE BTT shortcut on the Mission Control key (physical F3 in media-key
+# mode, keycode 160). macOS fnState stays false so volume/brightness stay normal.
 
 set -euo pipefail
 
@@ -118,9 +117,9 @@ end run
 payload = {
     "BTTTriggerClass": "BTTTriggerTypeKeyboardShortcut",
     "BTTTriggerType": 0,
-    "BTTEnabled": 0,
-    "BTTEnabled2": 0,
-    "BTTShortcutKeyCode": 99,
+    "BTTEnabled": 1,
+    "BTTEnabled2": 1,
+    "BTTShortcutKeyCode": 160,
     "BTTShortcutModifierKeys": 8388608,
     "BTTShortcutAdvancedModifierKeys": "8388608",
     "BTTAdditionalConfiguration": "8388608",
@@ -146,7 +145,7 @@ for t in triggers:
     if (
         "cycle-superwhisper-mode" in script
         or "Cycle Superwhisper" in notes
-        or (kc == 99 and "cycle-superwhisper" in script)
+        or ((kc == 99 or kc == 160) and "cycle-superwhisper" in script)
     ):
         matches.append(t)
 

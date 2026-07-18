@@ -77,27 +77,21 @@ Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you li
 
 ### 3. Keyboard toggle (F3) without breaking volume keys
 
-macOS cannot make only F3 a standard function key. Recommended setup:
+macOS cannot make only F3 a standard function key. Use BetterTouchTool (no Karabiner needed):
 
 1. Leave **Use F1, F2, etc. keys as standard function keys** **off** so volume / brightness stay on the top row.
-2. Use [Karabiner-Elements](https://karabiner-elements.pqrs.org) to map the physical **Mission Control** key (the F3 keycap in media-key mode) to the cycle script:
+2. In BTT → **Keyboard** → add a shortcut, press the physical **Mission Control / F3** key (it should record as Mission Control, not F3).
+3. Action → **Run Apple Script (async)**:
 
-   ```json
-   {
-     "description": "Mission Control key (F3) → cycle superwhisper modes",
-     "manipulators": [
-       {
-         "type": "basic",
-         "from": { "key_code": "mission_control", "modifiers": { "optional": ["any"] } },
-         "to": [{ "shell_command": "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode" }]
-       }
-     ]
-   }
+   ```applescript
+   do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
    ```
 
-3. Do **not** also bind the same action to a BetterTouchTool F3 shortcut, or both may fire.
+   Or import via JSON (`BTTShortcutKeyCode` `160` = Mission Control in media-key mode).
 
-**Keep BTT sync off** if you still use BTT for other things. Dropbox/iCloud sync can overwrite local shortcuts. For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool`.
+4. BTT needs **Input Monitoring** (and Accessibility) in System Settings. If the key records but still opens Mission Control, turn off BTT’s “use old keyboard shortcut implementation”.
+
+**Keep BTT sync off.** Dropbox/iCloud sync can overwrite local shortcuts. For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool`.
 
 ## Tip: flag emoji mode names
 
@@ -155,7 +149,7 @@ Two LaunchAgents keep things working after restart:
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
 
-Prefer media-key mode (standard function keys **off**) plus Karabiner’s Mission Control → cycle mapping so volume keys stay normal. Leave BTT Dropbox/iCloud sync disabled.
+Prefer media-key mode (standard function keys **off**) plus a BTT shortcut on the Mission Control key (keycode 160) so volume keys stay normal. Leave BTT Dropbox/iCloud sync disabled.
 
 ## Related
 
