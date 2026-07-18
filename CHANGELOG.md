@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-18 (hotfix)
+
+- Remove 17 duplicate F3 triggers caused by hourly ensure agent
+- Disable ensure LaunchAgent by default; keep a single working F3 shortcut
+
 ## 2026-07-18
 
 - Stop ensure agent from creating duplicate F3 triggers every hour; dedupe on login only

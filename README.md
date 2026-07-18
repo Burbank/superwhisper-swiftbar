@@ -138,7 +138,7 @@ Hotkeys and SwiftBar actions should call space-free symlinks in `~/.local/bin/` 
 Two LaunchAgents keep things working after restart:
 
 1. **Superwhisper Mode Sounds** — preloads cue audio  
-2. **ensure-superwhisper-f3** — runs once at login, deletes duplicate F3 shortcuts, and keeps exactly one enabled trigger
+2. **ensure-superwhisper-f3** (optional, disabled by default) — can recreate the F3 shortcut at login; left off because an earlier hourly version spawned duplicates
 
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
