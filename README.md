@@ -77,19 +77,23 @@ Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you li
 
 ### 3. Keyboard toggle (F3) without breaking volume keys
 
-macOS cannot make only F3 a standard function key. Use BetterTouchTool (no Karabiner needed):
+macOS cannot make only F3 a standard function key. Use BetterTouchTool only (no Karabiner):
 
-1. Leave **Use F1, F2, etc. keys as standard function keys** **off** so volume / brightness stay on the top row.
-2. In BTT → **Keyboard** → add a shortcut, press the physical **Mission Control / F3** key (it should record as Mission Control, not F3).
-3. Action → **Run Apple Script (async)**:
+1. Turn **Use F1, F2, etc. keys as standard function keys** **on** so bare **F3** reaches BTT.
+2. BTT global shortcut **F3** → Run Apple Script (async):
 
    ```applescript
    do shell script "/Users/YOUR_USERNAME/.local/bin/cycle-superwhisper-mode"
    ```
 
-   Or import via JSON (`BTTShortcutKeyCode` `160` = Mission Control in media-key mode).
+3. Because step 1 would otherwise break volume/brightness, also add BTT shortcuts that restore them:
+   - **F1** → Brightness Down  
+   - **F2** → Brightness Up  
+   - **F10** → Mute  
+   - **F11** → Volume Down  
+   - **F12** → Volume Up  
 
-4. BTT needs **Input Monitoring** (and Accessibility) in System Settings. If the key records but still opens Mission Control, turn off BTT’s “use old keyboard shortcut implementation”.
+`bin/ensure-btt-f3.sh` can recreate that set (optional; LaunchAgent left disabled by default).
 
 **Keep BTT sync off.** Dropbox/iCloud sync can overwrite local shortcuts. For backups, export a `.bttpreset` or copy `~/Library/Application Support/BetterTouchTool`.
 
@@ -149,7 +153,7 @@ Two LaunchAgents keep things working after restart:
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
 
-Prefer media-key mode (standard function keys **off**) plus a BTT shortcut on the Mission Control key (keycode 160) so volume keys stay normal. Leave BTT Dropbox/iCloud sync disabled.
+Use standard function keys **on** plus BTT: F3 cycles modes; F11/F12 (etc.) restore volume/brightness. Leave BTT Dropbox/iCloud sync disabled.
 
 ## Related
 

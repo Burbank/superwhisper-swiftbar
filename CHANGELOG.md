@@ -2,10 +2,10 @@
 
 ## 2026-07-18 (media keys + F3)
 
-- Restore normal media keys (volume etc.) by setting `com.apple.keyboard.fnState` off
-- Bind BetterTouchTool to Mission Control special key (`BTTShortcutKeyCode` 160), not standard F3 (99)
-- Avoid Karabiner for this — BTT alone handles the physical F3 keycap in media-key mode
-- Leave other function-row media keys unchanged
+- Fix broken Mission Control keycode-160 binding (physical F3 never matched)
+- Restore working BTT **F3** (keycode 99) + `fnState` on for bare F3
+- Add BTT remaps for F1/F2/F10/F11/F12 so brightness/mute/volume work without Fn
+- Keep Karabiner out of this path (Apple keyboards ignored; no superwhisper rule)
 
 ## 2026-07-18 (BTT sync)
 
