@@ -14,12 +14,19 @@ ASCRIPT="do shell script \"${CYCLE}\""
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*"; }
 
-# Prevent overlapping runs
+# Prevent overlapping runs (clear stale locks older than 2 minutes)
+if [ -d "$LOCK_FILE" ]; then
+    lock_age=$(( $(/bin/date +%s) - $(/usr/bin/stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0) ))
+    if [ "$lock_age" -gt 120 ]; then
+        log "removing stale lock (${lock_age}s)"
+        /bin/rm -rf "$LOCK_FILE"
+    fi
+fi
 if ! /usr/bin/mkdir "$LOCK_FILE" 2>/dev/null; then
     log "another ensure run is in progress; exiting"
     exit 0
 fi
-trap '/bin/rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
+trap '/bin/rm -rf "$LOCK_FILE" 2>/dev/null || true' EXIT
 
 for _ in $(seq 1 90); do
     if pgrep -x BetterTouchTool >/dev/null 2>&1; then
