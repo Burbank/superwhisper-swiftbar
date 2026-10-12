@@ -82,7 +82,7 @@ Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you li
 
 Source: [bin/flag-flash.swift](bin/flag-flash.swift). Installer: [bin/install-flag-flash.sh](bin/install-flag-flash.sh).
 
-When the Superwhisper dictation key is pressed, a large flag for the **current** mode flashes on every display for about a second. Superwhisper still receives the key. The app does not track whether a recording is already running, so the press that stops a toggle flashes too. Holding the key does not flash again.
+When the Superwhisper dictation key is pressed, a flag for the **current** mode flashes on every display for about 0.3 seconds. It is about a tenth of the screen wide and half transparent. Superwhisper still receives the key. The app does not track whether a recording is already running, so the press that stops a toggle flashes too. Holding the key does not flash again.
 
 The Mac keyboard and an external keyboard can use different dictation keys. The app watches every record shortcut saved in Superwhisper, including a shortcut stored on a mode, and also the moment a recording starts. Either key shows the language that is active for that press.
 

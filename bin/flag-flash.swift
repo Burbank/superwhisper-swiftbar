@@ -12,10 +12,11 @@ import Darwin
 import QuartzCore
 
 private let preferenceDomain = "com.superduper.superwhisper" as CFString
-private let fadeIn: TimeInterval = 0.08
-private let hold: TimeInterval = 1.0
-private let fadeOut: TimeInterval = 0.25
-private let flagWidthFraction: CGFloat = 0.5
+private let fadeIn: TimeInterval = 0.04
+private let hold: TimeInterval = 0.22
+private let fadeOut: TimeInterval = 0.04
+private let flagWidthFraction: CGFloat = 0.1
+private let flagOpacity: CGFloat = 0.5
 private let samePressWindow: TimeInterval = 0.2
 
 private func isDictationShortcutName(_ key: String) -> Bool {
@@ -306,7 +307,7 @@ private final class Overlay {
             context.duration = fadeIn
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             for window in windows {
-                window.animator().alphaValue = 1
+                window.animator().alphaValue = flagOpacity
             }
         }
 
