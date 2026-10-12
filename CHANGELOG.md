@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-12
+
+- Flash a large Dutch, American, or Spanish flag for about a second when the Superwhisper dictation key is pressed
+- The flag follows the active mode (`activeModeKey` and the mode’s language). See [Language flag flash](README.md#language-flag-flash)
+- Background app **Superwhisper Language Flash** ([bin/flag-flash.swift](bin/flag-flash.swift)), listen-only, so the shortcut still reaches Superwhisper
+
 ## 2026-07-18 (media keys + F3)
 
 - Fix broken Mission Control keycode-160 binding (physical F3 never matched)
