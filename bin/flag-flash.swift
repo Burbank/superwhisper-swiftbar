@@ -189,7 +189,7 @@ private enum FlagDrawing {
         var size = rect.height * 0.34
         var font = NSFont.systemFont(ofSize: size, weight: .bold)
         let maxWidth = rect.width * 0.88
-        var textWidth = (text as NSString).size(withAttributes: [.font: font]).width
+        let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
         if textWidth > maxWidth, textWidth > 0 {
             size *= maxWidth / textWidth
             font = NSFont.systemFont(ofSize: max(size, 24), weight: .bold)
@@ -703,7 +703,8 @@ private final class KeyWatcher {
         if port != nil { return true }
         if !AXIsProcessTrusted() && !didPrompt {
             didPrompt = true
-            let options = [kAXTrustedCheckOptionPrompt as String: true] as CFDictionary
+            let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+            let options = [promptKey: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
             log("grant Accessibility to Superwhisper Language Flash. System Settings → Privacy & Security → Accessibility")
         }
@@ -789,8 +790,8 @@ private func previewArgument() -> FlagKind? {
     return kind
 }
 
-let app = NSApplication.shared
-let controller = AppController()
+private let app = NSApplication.shared
+private let controller = AppController()
 controller.preview = previewArgument()
 Holder.controller = controller
 app.setActivationPolicy(.accessory)
