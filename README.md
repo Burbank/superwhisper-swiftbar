@@ -84,7 +84,9 @@ Source: [bin/flag-flash.swift](bin/flag-flash.swift). Installer: [bin/install-fl
 
 When the Superwhisper dictation key is pressed, a large flag for the **current** mode flashes on every display for about a second. Superwhisper still receives the key. The app does not track whether a recording is already running, so the press that stops a toggle flashes too. Holding the key does not flash again.
 
-The shortcut is read from Superwhisper’s preferences (`KeyboardShortcuts_toggleRecording`, and `KeyboardShortcuts_pushToTalk` when that key is different). The flag uses the same active mode as the menu bar:
+The Mac keyboard and an external keyboard can use different dictation keys. The app watches every record shortcut saved in Superwhisper, including a shortcut stored on a mode, and also the moment a recording starts. Either key shows the language that is active for that press.
+
+The flag uses the same active mode as the menu bar:
 
 | Mode key / language | Flag |
 | --- | --- |
@@ -97,7 +99,7 @@ The shortcut is read from Superwhisper’s preferences (`KeyboardShortcuts_toggl
 ./bin/install-flag-flash.sh
 ```
 
-Then allow **Superwhisper Language Flash** under **System Settings → Privacy & Security → Accessibility**. It appears as a background item (no Dock icon). After granting access, the agent restarts itself.
+The background-item prompt is the one that keeps it running. Seeing the saved shortcut as a key also needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and add **Superwhisper Language Flash** from `~/Library/Application Support/superwhisper-swiftbar/bin/`. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
 
 Preview without dictating:
 

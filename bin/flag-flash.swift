@@ -8,6 +8,7 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
+import Darwin
 import QuartzCore
 
 private let preferenceDomain = "com.superduper.superwhisper" as CFString
@@ -17,10 +18,16 @@ private let fadeOut: TimeInterval = 0.25
 private let flagWidthFraction: CGFloat = 0.5
 private let samePressWindow: TimeInterval = 0.2
 
-private let shortcutNames: Set<String> = [
-    "keyboardshortcuts_togglerecording",
-    "keyboardshortcuts_pushtotalk",
-]
+private func isDictationShortcutName(_ key: String) -> Bool {
+    let lowered = key.lowercased()
+    if lowered.contains("cancel") || lowered.contains("changemode") || lowered.contains("change_mode") {
+        return false
+    }
+    return lowered.contains("togglerecording")
+        || lowered.contains("pushtotalk")
+        || lowered.contains("push_to_talk")
+        || lowered.contains("startrecording")
+}
 
 private let cmdKeyBit = 256
 private let shiftKeyBit = 512
@@ -345,7 +352,7 @@ private final class Overlay {
 
 // MARK: - Current mode
 
-private struct Mode {
+private struct Mode: Equatable {
     var key: String
     var name: String
     var language: String
@@ -434,6 +441,7 @@ private struct DictationShortcut: Equatable {
     var name: String
     var keyCode: Int
     var flags: CGEventFlags
+    var mode: Mode?
 
     var signature: String { "\(keyCode)-\(flags.rawValue)" }
 
@@ -445,7 +453,11 @@ private struct DictationShortcut: Equatable {
         if flags.contains(.maskCommand) { parts.append("command") }
         if flags.contains(.maskSecondaryFn) { parts.append("fn") }
         parts.append("key \(keyCode)")
-        return "\(name) \(parts.joined(separator: "+"))"
+        let chord = parts.joined(separator: "+")
+        if let mode {
+            return "\(name) \(chord) (\(mode.key))"
+        }
+        return "\(name) \(chord)"
     }
 }
 
@@ -522,7 +534,7 @@ private func parseShortcut(named name: String, value: Any) -> DictationShortcut?
     if keyCode < 0 {
         return nil
     }
-    return DictationShortcut(name: name, keyCode: keyCode, flags: carbonFlags(modifiers))
+    return DictationShortcut(name: name, keyCode: keyCode, flags: carbonFlags(modifiers), mode: nil)
 }
 
 private var lastShortcutProblem = ""
@@ -549,7 +561,7 @@ private func readShortcuts() -> [DictationShortcut] {
     var shortcuts: [DictationShortcut] = []
     var seen: Set<String> = []
     var problems: [String] = []
-    for key in keys where shortcutNames.contains(key.lowercased()) {
+    for key in keys where isDictationShortcutName(key) {
         guard let value = CFPreferencesCopyAppValue(key as CFString, preferenceDomain) else { continue }
         guard let shortcut = parseShortcut(named: key, value: value) else {
             problems.append("\(key)=\(value)")
@@ -584,15 +596,86 @@ private func shortcutKeysForLog() -> [String] {
 
 private func matches(_ shortcut: DictationShortcut, keyCode: Int, eventFlags: CGEventFlags) -> Bool {
     guard shortcut.keyCode == keyCode else { return false }
-    let present = eventFlags.intersection(relevantFlags)
-    let allowed = shortcut.flags.union(impliedFlags(for: keyCode))
+    var present = eventFlags.intersection(relevantFlags)
+    // External keyboards often add Fn. Ignore it unless the shortcut is the Fn key itself.
+    if keyCode != 63 {
+        present.remove(.maskSecondaryFn)
+    }
+    var allowed = shortcut.flags.union(impliedFlags(for: keyCode))
+    if keyCode != 63 {
+        allowed.remove(.maskSecondaryFn)
+    }
     return present == allowed
+}
+
+private func collectCarbonPairs(in value: Any, into pairs: inout [(Int, Int)]) {
+    if let object = value as? [String: Any] {
+        if let code = intValue(object["carbonKeyCode"]), let modifiers = intValue(object["carbonModifiers"]), code >= 0 {
+            pairs.append((code, modifiers))
+        }
+        for child in object.values {
+            collectCarbonPairs(in: child, into: &pairs)
+        }
+    } else if let array = value as? [Any] {
+        for child in array {
+            collectCarbonPairs(in: child, into: &pairs)
+        }
+    }
+}
+
+private func readModeShortcuts() -> [DictationShortcut] {
+    guard let folder = superwhisperFolder() else { return [] }
+    let directory = folder.appendingPathComponent("modes")
+    guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+        return []
+    }
+    var shortcuts: [DictationShortcut] = []
+    var seen: Set<String> = []
+    for file in files where file.pathExtension.lowercased() == "json" {
+        guard
+            let data = try? Data(contentsOf: file),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            continue
+        }
+        let filename = file.deletingPathExtension().lastPathComponent
+        let key = (object["key"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? filename
+        let name = (object["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? key
+        let language = object["language"] as? String ?? ""
+        let mode = Mode(key: key, name: name, language: language)
+        var pairs: [(Int, Int)] = []
+        collectCarbonPairs(in: object, into: &pairs)
+        for (keyCode, modifiers) in pairs {
+            let shortcut = DictationShortcut(
+                name: "mode \(key)",
+                keyCode: keyCode,
+                flags: carbonFlags(modifiers),
+                mode: mode
+            )
+            if seen.insert(shortcut.signature).inserted {
+                shortcuts.append(shortcut)
+            }
+        }
+    }
+    return shortcuts
+}
+
+private func allDictationShortcuts() -> [DictationShortcut] {
+    var bySignature: [String: DictationShortcut] = [:]
+    for shortcut in readShortcuts() {
+        bySignature[shortcut.signature] = shortcut
+    }
+    // A per-mode key starts dictation in that mode, so it wins over a global key with the same chord.
+    for shortcut in readModeShortcuts() {
+        bySignature[shortcut.signature] = shortcut
+    }
+    return Array(bySignature.values)
 }
 
 // MARK: - Event tap
 
 private final class KeyWatcher {
-    var onPress: () -> Void = {}
+    var onPress: (DictationShortcut) -> Void = { _ in }
     private var port: CFMachPort?
     private var source: CFRunLoopSource?
     private var shortcuts: [DictationShortcut] = []
@@ -627,26 +710,26 @@ private final class KeyWatcher {
             let wentDown = modifierWentDown(keyCode: keyCode, previous: lastFlags, current: flags)
             lastFlags = flags
             guard wentDown, modifierKeyCodes.contains(keyCode) else { return }
-            if currentShortcuts().contains(where: { matches($0, keyCode: keyCode, eventFlags: flags) }) {
-                registerPress()
+            if let shortcut = currentShortcuts().first(where: { matches($0, keyCode: keyCode, eventFlags: flags) }) {
+                registerPress(shortcut)
             }
             return
         }
 
         guard type == .keyDown else { return }
         if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return }
-        guard currentShortcuts().contains(where: { matches($0, keyCode: keyCode, eventFlags: flags) }) else {
+        guard let shortcut = currentShortcuts().first(where: { matches($0, keyCode: keyCode, eventFlags: flags) }) else {
             return
         }
-        registerPress()
+        registerPress(shortcut)
     }
 
-    private func registerPress() {
+    private func registerPress(_ shortcut: DictationShortcut) {
         let now = Date()
         if now.timeIntervalSince(lastPressAt) < samePressWindow { return }
         lastPressAt = now
         DispatchQueue.main.async { [weak self] in
-            self?.onPress()
+            self?.onPress(shortcut)
         }
     }
 
@@ -664,7 +747,7 @@ private final class KeyWatcher {
     }
 
     private func reloadShortcuts(forceLog: Bool) {
-        let fresh = readShortcuts()
+        let fresh = allDictationShortcuts()
         shortcutsLoadedAt = Date()
         let changed = fresh != shortcuts
         shortcuts = fresh
@@ -673,7 +756,7 @@ private final class KeyWatcher {
                 didLogMissingShortcut = true
                 let known = shortcutKeysForLog()
                 if known.isEmpty {
-                    log("no KeyboardShortcuts_toggleRecording or KeyboardShortcuts_pushToTalk in Superwhisper preferences")
+                    log("no dictation shortcut found in Superwhisper preferences or mode files")
                 } else {
                     log("dictation shortcut not found. Related keys: \(known.joined(separator: ", "))")
                 }
@@ -713,7 +796,7 @@ private final class KeyWatcher {
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
+            place: .tailAppendEventTap,
             options: .listenOnly,
             eventsOfInterest: CGEventMask(mask),
             callback: { _, type, event, userInfo in
@@ -749,12 +832,116 @@ private final class KeyWatcher {
     }
 }
 
+// MARK: - Recording start
+
+private final class RecordingWatcher {
+    var onStart: () -> Void = {}
+    private var known: Set<String> = []
+    private var source: DispatchSourceFileSystemObject?
+    private var recordingsPath: String?
+    private var retry: DispatchWorkItem?
+
+    func start() {
+        arm()
+    }
+
+    private func arm() {
+        guard let folder = superwhisperFolder() else {
+            log("waiting for the Superwhisper folder")
+            retryLater()
+            return
+        }
+        let path = folder.appendingPathComponent("recordings").path
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            log("recordings folder not found at \(path)")
+            retryLater()
+            return
+        }
+        if path == recordingsPath, source != nil { return }
+
+        source?.cancel()
+        let descriptor = Darwin.open(path, O_EVTONLY)
+        guard descriptor >= 0 else {
+            log("could not watch \(path)")
+            retryLater()
+            return
+        }
+        recordingsPath = path
+        known = subdirectoryNames(at: path)
+        let watched = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: .write,
+            queue: DispatchQueue.global(qos: .userInteractive)
+        )
+        watched.setEventHandler { [weak self] in
+            self?.scan()
+        }
+        watched.setCancelHandler {
+            Darwin.close(descriptor)
+        }
+        source = watched
+        watched.resume()
+        log("watching recordings in \(path)")
+    }
+
+    private func subdirectoryNames(at path: String) -> Set<String> {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: path) else { return [] }
+        var directories: Set<String> = []
+        for name in names where !name.hasPrefix(".") {
+            var isDirectory: ObjCBool = false
+            let child = (path as NSString).appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: child, isDirectory: &isDirectory), isDirectory.boolValue {
+                directories.insert(name)
+            }
+        }
+        return directories
+    }
+
+    private func scan() {
+        guard let path = recordingsPath else { return }
+        let current = subdirectoryNames(at: path)
+        let fresh = current.subtracting(known)
+        known = current
+        guard let name = fresh.sorted().last else { return }
+        let child = (path as NSString).appendingPathComponent(name)
+        if let created = (try? FileManager.default.attributesOfItem(atPath: child)[.creationDate]) as? Date,
+           Date().timeIntervalSince(created) > 8 {
+            log("ignored old recording folder \(name)")
+            return
+        }
+        let metaURL = URL(fileURLWithPath: child).appendingPathComponent("meta.json")
+        if let data = try? Data(contentsOf: metaURL),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let duration = intValue(object["duration"]),
+           duration > 0 {
+            log("ignored finished recording \(name)")
+            return
+        }
+        log("recording started \(name)")
+        DispatchQueue.main.async { [weak self] in
+            self?.onStart()
+        }
+    }
+
+    private func retryLater() {
+        retry?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.arm()
+        }
+        retry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+    }
+}
+
 // MARK: - App
 
 private final class AppController: NSObject, NSApplicationDelegate {
     let overlay = Overlay()
     let watcher = KeyWatcher()
+    let recordingWatcher = RecordingWatcher()
     var preview: FlagKind?
+    private var lastLanguageFlash = Date.distantPast
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let preview {
@@ -766,12 +953,29 @@ private final class AppController: NSObject, NSApplicationDelegate {
             }
             return
         }
-        watcher.onPress = { [weak self] in
-            guard let self else { return }
-            self.overlay.flash(currentFlagKind())
+        watcher.onPress = { [weak self] shortcut in
+            self?.showFlag(for: shortcut)
+        }
+        recordingWatcher.onStart = { [weak self] in
+            self?.showFlag(for: nil)
         }
         watcher.start()
+        recordingWatcher.start()
         log("ready")
+    }
+
+    private func showFlag(for shortcut: DictationShortcut?) {
+        let now = Date()
+        if now.timeIntervalSince(lastLanguageFlash) < 1.2 { return }
+        lastLanguageFlash = now
+        let kind: FlagKind
+        if let mode = shortcut?.mode {
+            kind = flagKind(language: mode.language, key: mode.key, name: mode.name)
+            log("dictation key for mode \(mode.key)")
+        } else {
+            kind = currentFlagKind()
+        }
+        overlay.flash(kind)
     }
 }
 
