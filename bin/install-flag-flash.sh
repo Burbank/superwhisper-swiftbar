@@ -50,9 +50,17 @@ sed -e "s|__APP_EXECUTABLE__|${BIN}|g" \
     -e "s|__LOG_PATH__|${LOG}|g" \
     "$ROOT/LaunchAgents/com.burbank.superwhisper-flag-flash.plist.template" > "$PLIST"
 
-launchctl bootout "gui/$(id -u)/${LABEL}" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
-launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+DOMAIN="gui/$(id -u)"
+SERVICE="${DOMAIN}/${LABEL}"
+# A disabled service makes bootstrap fail with "Bootstrap failed: 5: Input/output error".
+launchctl enable "$SERVICE" 2>/dev/null || true
+launchctl bootout "$SERVICE" 2>/dev/null || true
+if ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
+  launchctl enable "$SERVICE" 2>/dev/null || true
+  launchctl bootout "$SERVICE" 2>/dev/null || true
+  launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null || true
+fi
+launchctl kickstart -k "$SERVICE"
 
 echo "Installed. Background item name: Superwhisper Language Flash"
 echo "System Settings → Privacy & Security → Accessibility → allow Superwhisper Language Flash"
