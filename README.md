@@ -108,7 +108,24 @@ Preview without dictating:
 ~/.local/bin/flag-flash --preview nl
 ```
 
-Log: `~/Library/Application Support/superwhisper-swiftbar/flag-flash.log`
+Settings are a small file, changed from the terminal. The next flash uses them; the background app does not need a restart.
+
+```bash
+~/.local/bin/flag-flash settings
+~/.local/bin/flag-flash set width 10
+~/.local/bin/flag-flash set opacity 50
+~/.local/bin/flag-flash set seconds 0.3
+```
+
+`width` is the percent of the screen width (2–80). `opacity` is the percent visible (5–100). `seconds` is how long the flag stays up (0.05–5).
+
+The app is a login item. After a restart it starts again when you log in, not before the login screen. Check it with:
+
+```bash
+~/.local/bin/flag-flash status
+```
+
+`running` means it is loaded. Log: `~/Library/Application Support/superwhisper-swiftbar/flag-flash.log`
 
 ### 4. Keyboard toggle (F3) without breaking volume keys
 

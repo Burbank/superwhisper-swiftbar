@@ -12,12 +12,70 @@ import Darwin
 import QuartzCore
 
 private let preferenceDomain = "com.superduper.superwhisper" as CFString
-private let fadeIn: TimeInterval = 0.04
-private let hold: TimeInterval = 0.22
-private let fadeOut: TimeInterval = 0.04
-private let flagWidthFraction: CGFloat = 0.1
-private let flagOpacity: CGFloat = 0.5
 private let samePressWindow: TimeInterval = 0.2
+private let launchAgentLabel = "com.burbank.superwhisper-flag-flash"
+
+private struct FlagSettings: Codable {
+    var widthPercent: Double = 10
+    var opacityPercent: Double = 50
+    var seconds: Double = 0.3
+
+    var fadeIn: TimeInterval { min(0.04, seconds * 0.13) }
+    var fadeOut: TimeInterval { fadeIn }
+    var hold: TimeInterval { max(0, seconds - fadeIn - fadeOut) }
+    var widthFraction: CGFloat { CGFloat(widthPercent / 100) }
+    var opacity: CGFloat { CGFloat(opacityPercent / 100) }
+
+    static func load() -> FlagSettings {
+        let url = settingsFileURL()
+        guard let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode(FlagSettings.self, from: data) else {
+            return FlagSettings()
+        }
+        return decoded.clamped()
+    }
+
+    func save() throws {
+        let url = settingsFileURL()
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(clamped()).write(to: url)
+    }
+
+    func clamped() -> FlagSettings {
+        var copy = self
+        copy.widthPercent = min(80, max(2, widthPercent))
+        copy.opacityPercent = min(100, max(5, opacityPercent))
+        copy.seconds = min(5, max(0.05, seconds))
+        return copy
+    }
+
+    func summary() -> String {
+        let file = settingsFileURL().path
+        return """
+        width    \(format(widthPercent))% of the screen
+        opacity  \(format(opacityPercent))%
+        shown    \(format(seconds)) seconds
+        file     \(file)
+        """
+    }
+}
+
+private func settingsFileURL() -> URL {
+    FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json")
+}
+
+private func format(_ value: Double) -> String {
+    if value == value.rounded() {
+        return String(Int(value))
+    }
+    return String(format: "%.2f", value)
+}
 
 private func isDictationShortcutName(_ key: String) -> Bool {
     let lowered = key.lowercased()
@@ -273,11 +331,15 @@ private final class Overlay {
             log("no displays")
             return
         }
+        let settings = FlagSettings.load()
+        let fadeIn = settings.fadeIn
+        let hold = settings.hold
+        let fadeOut = settings.fadeOut
         windows.forEach { $0.orderOut(nil) }
         windows = screens.map { _ in makeWindow() }
 
         for (window, screen) in zip(windows, screens) {
-            let width = screen.frame.width * flagWidthFraction
+            let width = screen.frame.width * settings.widthFraction
             var height = width / kind.aspect
             let maxHeight = screen.frame.height * 0.7
             var fittedWidth = width
@@ -307,7 +369,7 @@ private final class Overlay {
             context.duration = fadeIn
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             for window in windows {
-                window.animator().alphaValue = flagOpacity
+                window.animator().alphaValue = settings.opacity
             }
         }
 
@@ -946,9 +1008,10 @@ private final class AppController: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let preview {
+            let shown = FlagSettings.load().seconds
             DispatchQueue.main.async {
                 self.overlay.flash(preview)
-                DispatchQueue.main.asyncAfter(deadline: .now() + fadeIn + hold + fadeOut + 0.2) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + shown + 0.25) {
                     NSApp.terminate(nil)
                 }
             }
@@ -984,6 +1047,79 @@ private enum Holder {
     static var controller: AppController?
 }
 
+private func handleSettingsCommand() {
+    let arguments = Array(CommandLine.arguments.dropFirst())
+    guard let command = arguments.first else { return }
+    if command == "settings" || command == "--settings" {
+        print(FlagSettings.load().summary())
+        exit(0)
+    }
+    if command == "status" || command == "--status" {
+        print(launchAgentStatus())
+        print(FlagSettings.load().summary())
+        exit(0)
+    }
+    if command == "set" || command == "--set" {
+        guard arguments.count >= 3 else {
+            fputs("Usage: flag-flash set width 10 | opacity 50 | seconds 0.3\n", stderr)
+            exit(2)
+        }
+        var settings = FlagSettings.load()
+        let name = arguments[1].lowercased()
+        let raw = arguments[2].replacingOccurrences(of: "%", with: "")
+        guard let value = Double(raw) else {
+            fputs("flag-flash: \(arguments[2]) is not a number\n", stderr)
+            exit(2)
+        }
+        switch name {
+        case "width", "size":
+            settings.widthPercent = value
+        case "opacity", "transparency", "alpha":
+            settings.opacityPercent = value
+        case "seconds", "time", "duration":
+            settings.seconds = value
+        default:
+            fputs("flag-flash: unknown setting \(arguments[1]). Use width, opacity, or seconds.\n", stderr)
+            exit(2)
+        }
+        settings = settings.clamped()
+        do {
+            try settings.save()
+        } catch {
+            fputs("flag-flash: could not save settings: \(error)\n", stderr)
+            exit(1)
+        }
+        print(settings.summary())
+        exit(0)
+    }
+}
+
+private func launchAgentStatus() -> String {
+    let uid = getuid()
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+    task.arguments = ["print", "gui/\(uid)/\(launchAgentLabel)"]
+    let pipe = Pipe()
+    task.standardOutput = pipe
+    task.standardError = pipe
+    do {
+        try task.run()
+        task.waitUntilExit()
+    } catch {
+        return "Superwhisper Language Flash is not loaded. It starts when you log in."
+    }
+    let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    if task.terminationStatus != 0 {
+        return "Superwhisper Language Flash is not loaded. It starts when you log in."
+    }
+    let running = output.contains("state = running")
+    let state = running ? "running" : "loaded, not running"
+    return """
+    Superwhisper Language Flash is \(state).
+    It starts again when you log in after a restart. It does not start before the login screen.
+    """
+}
+
 private func previewArgument() -> FlagKind? {
     let arguments = CommandLine.arguments
     guard let index = arguments.firstIndex(of: "--preview") else { return nil }
@@ -994,6 +1130,8 @@ private func previewArgument() -> FlagKind? {
     }
     return kind
 }
+
+handleSettingsCommand()
 
 private let app = NSApplication.shared
 private let controller = AppController()

@@ -3,6 +3,8 @@
 ## 2026-10-12
 
 - Flash a Dutch, American, or Spanish flag for about 0.3 seconds when dictation starts. The flag is a tenth of the screen wide and half transparent
+- Terminal settings for flag width, opacity, and time on screen: `flag-flash settings` and `flag-flash set`
+- `flag-flash status` reports whether the login item is running after a restart
 - A different key on the Mac keyboard and on an external keyboard both flash. Mode shortcuts and the start of a recording are watched, not only one global key
 - The flag follows the active mode (`activeModeKey` and the mode’s language). See [Language flag flash](README.md#language-flag-flash)
 - Background app **Superwhisper Language Flash** ([bin/flag-flash.swift](bin/flag-flash.swift)), listen-only, so the shortcut still reaches Superwhisper
