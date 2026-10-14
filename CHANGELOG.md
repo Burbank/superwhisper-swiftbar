@@ -2,7 +2,7 @@
 
 ## 2026-10-14
 
-- How to use Language Flash, with pictures of the flash, the settings window, and the language list
+- Language Flash has its own folder and a short page: [language-flash](language-flash/README.md), titled Language Flash for Superwhisper
 - The installer notarizes Language Flash when this Mac has the same Developer ID certificate and notary login as yourMark. Without that certificate it still installs and signs the app locally
 - **Languages…** is a list you own. Rename, replace, or remove Dutch, English, and Spanish, and add any other language. After you edit the list, those three are no longer built in
 - **Language Flash** settings window in Applications, with a Dutch-and-American flag icon. Sliders set size, opacity, and time on screen, and the window shows whether the background flash is running
@@ -22,7 +22,7 @@
 - `flag-flash status` reports whether the login item is running after a restart
 - The installer recovers when macOS reports `Bootstrap failed: 5: Input/output error` for an already registered login item
 - A different key on the Mac keyboard and on an external keyboard both flash. Mode shortcuts and the start of a recording are watched, not only one global key
-- The flag follows the active mode (`activeModeKey` and the mode’s language). See [Language flag flash](README.md#language-flag-flash)
+- The flag follows the active mode (`activeModeKey` and the mode’s language). See [Language Flash](language-flash/README.md)
 - Background app **Superwhisper Language Flash** ([bin/flag-flash.swift](bin/flag-flash.swift)), listen-only, so the shortcut still reaches Superwhisper
 
 ## 2026-07-18 (media keys + F3)

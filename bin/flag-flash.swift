@@ -1,5 +1,5 @@
 // flag-flash.swift — flash the active Superwhisper language when the dictation key is pressed.
-// Project: README.md#language-flag-flash
+// Project: language-flash/README.md
 //
 // Listen-only event tap, so Superwhisper still receives the shortcut.
 // The flag comes from activeModeKey and the mode's language. This app does not

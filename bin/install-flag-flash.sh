@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build and install the language-flag flash and its settings app.
 # Flashes the active Superwhisper language when the dictation key is pressed.
-# See README.md#language-flag-flash.
+# See language-flash/README.md.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

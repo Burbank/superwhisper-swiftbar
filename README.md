@@ -11,7 +11,7 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 - Reads modes from `~/Documents/superwhisper/modes/*.json` — always in sync
 - Keeps your current app focused (`open -g`)
 - Instant language cues via a background **Superwhisper Mode Sounds** agent (preloaded WAVs)
-- [Language flag flash](#language-flag-flash) when the dictation key is pressed — source: [bin/flag-flash.swift](bin/flag-flash.swift)
+- [Language Flash](language-flash/README.md) for Superwhisper, a separate app that flashes a flag when you dictate
 
 ## How it works
 
@@ -21,8 +21,8 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 | `switch-superwhisper-mode.sh` | Plays cue + switches mode without stealing focus |
 | `cycle-superwhisper-mode.sh` | Advances to the next mode (for BTT / hotkeys) |
 | `bin/sound-server.swift` | Preloads `now_US.wav` / `now_NL.wav`, plays on FIFO command |
-| [`bin/flag-flash.swift`](bin/flag-flash.swift) | [Language flag flash](#language-flag-flash) on the dictation key |
-| [`bin/flag-settings.swift`](bin/flag-settings.swift) | **Language Flash** settings window in Applications |
+| [`bin/flag-flash.swift`](bin/flag-flash.swift) | [Language Flash](language-flash/README.md) on the dictation key |
+| [`bin/flag-settings.swift`](bin/flag-settings.swift) | Language Flash window in Applications |
 | LaunchAgent | Keeps **Superwhisper Mode Sounds** and **Language Flash** running in the background |
 
 Cue mapping (mode key → sound):
@@ -79,86 +79,9 @@ This compiles the agent, installs sounds into `~/Documents/swiftbar/sounds/`, an
 
 Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you like, then re-run the install script (or restart the agent).
 
-### 3. Language flag flash
+### 3. Language Flash
 
-Source: [bin/flag-flash.swift](bin/flag-flash.swift). Settings window: [bin/flag-settings.swift](bin/flag-settings.swift). Installer: [bin/install-flag-flash.sh](bin/install-flag-flash.sh).
-
-When the Superwhisper dictation key is pressed, a flag for the **current** mode flashes on every display for about 0.3 seconds. It is about a tenth of the screen wide and half transparent. Superwhisper still receives the key. The app does not track whether a recording is already running, so the press that stops a toggle flashes too. Holding the key does not flash again.
-
-The Mac keyboard and an external keyboard can use different dictation keys. The app watches every record shortcut saved in Superwhisper, including a shortcut stored on a mode, and also the moment a recording starts. Either key shows the language that is active for that press.
-
-### How to use Language Flash
-
-Press the dictation key. A small flag for the language that is active flashes on the screen, then disappears. Superwhisper still receives the key.
-
-![A small Dutch flag flashes in the middle of the screen when dictation starts](docs/language-flash/flash.png)
-
-Open **Language Flash** from the Applications folder. The sliders set how wide the flag is, how solid it is, and how long it stays. **Preview** shows that on screen. The green **Running** line means the next dictation will flash.
-
-![Language Flash settings: size, opacity, time, Preview, Languages, and a Running status](docs/language-flash/settings.png)
-
-**Languages…** is the whole list. The name and the flag on every row can be changed, including Dutch, English, and Spanish. **Remove** deletes a row. **Add language** adds one. **Preview** on a row flashes that flag.
-
-![Languages window with Dutch, English, and Spanish as editable rows](docs/language-flash/languages.png)
-
-After you edit the list, only that list is used. A row that started from a Superwhisper mode keeps following that mode when you rename it. A new row follows a mode with the same name. The next dictation uses the change. The background flash does not need a restart.
-
-![The same list after Dutch, English, and Spanish were replaced with German, French, and Portuguese](docs/language-flash/changed.png)
-
-`NL`, `US`, and `ES` are drawn flags. Any other country code, such as `FR`, `DE`, or `PT`, uses that country’s flag.
-
-The flag uses the same active mode as the menu bar. Until you edit the list, Dutch, English, and Spanish are the starting flags:
-
-| Mode key / language | Flag |
-| --- | --- |
-| `default` / `en` | United States |
-| `super` / `nl` | Netherlands |
-| `es` | Spain |
-| anything else | the mode name |
-
-Keep this git folder outside iCloud. A pull inside `Mobile Documents` can stop with `mmap failed: Operation canceled`, and then the installer never runs. On this Mac, use a local copy:
-
-```bash
-mkdir -p "$HOME/.local/src"
-git clone --branch cursor/dictation-flag-flash-f3a2 --single-branch https://github.com/Burbank/superwhisper-swiftbar.git "$HOME/.local/src/superwhisper-swiftbar"
-"$HOME/.local/src/superwhisper-swiftbar/bin/install-flag-flash.sh"
-```
-
-From a copy that is already on disk:
-
-```bash
-./bin/install-flag-flash.sh
-```
-
-The installer puts **Language Flash** in the main Applications folder, `/Applications`, next to your other apps. It does not go in Utilities. If that folder is not writable, it uses `~/Applications` instead, and the script prints the path. The icon is a Dutch flag with a small American flag on the corner.
-
-On a Mac that already has the Developer ID certificate used for yourMark, the installer signs Language Flash and sends it to Apple for notarization, using the same notary login (`yourmark-notary`). That takes a few minutes. Afterwards the app opens without the “developer cannot be verified” warning, including on another Mac. If that certificate is not on the machine, the app still installs and is signed locally, and Gatekeeper may ask the first time it opens.
-
-The window has a **Start when you log in** checkbox. Turning it on registers Language Flash with macOS, so the name appears under **System Settings → General → Login Items & Extensions**. **Login Items…** opens that list. A background job installed by hand only produces a short notification and does not show the app name there.
-
-Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview** flashes the first language in your list. Each row in **Languages…** has its own Preview.
-
-Seeing the saved shortcut as a key needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and allow **Language Flash**. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
-
-The same settings can still be changed from the terminal. Both write `~/Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json`.
-
-```bash
-~/.local/bin/flag-flash settings
-~/.local/bin/flag-flash set width 10
-~/.local/bin/flag-flash set opacity 50
-~/.local/bin/flag-flash set seconds 0.3
-~/.local/bin/flag-flash --preview en
-```
-
-`width` is the percent of the screen width (2–80). `opacity` is the percent visible (5–100). `seconds` is how long the flag stays up (0.05–5).
-
-The flash is a login item. After a restart it starts again when you log in, not before the login screen. The Language Flash window shows **Running** or **Not running**. From the terminal:
-
-```bash
-~/.local/bin/flag-flash status
-```
-
-Log: `~/Library/Application Support/superwhisper-swiftbar/flag-flash.log`
+[Language Flash](language-flash/README.md) for Superwhisper. Follow that page. Script notes are in [language-flash/install.md](language-flash/install.md).
 
 ### 4. Keyboard toggle (F3) without breaking volume keys
 

@@ -1,5 +1,5 @@
 // flag-settings.swift — settings window for the Superwhisper language flag.
-// Project: README.md#language-flag-flash
+// Project: language-flash/README.md
 //
 // Writes the same file the background flash reads on the next dictation:
 // ~/Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json
