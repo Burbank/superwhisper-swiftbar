@@ -180,9 +180,12 @@ if ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
   launchctl bootout "$SERVICE" 2>/dev/null || true
   launchctl bootstrap "$DOMAIN" "$PLIST"
 fi
-launchctl kickstart -k "$SERVICE"
-
-codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
+launchctl kickstart -k "$SERVICE" || true
+if launchctl print "$SERVICE" 2>/dev/null | grep -q "state = running"; then
+  echo "Background flash: running"
+else
+  echo "Background flash: not running. Open Language Flash and click Start."
+fi
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [ -x "$LSREGISTER" ]; then
