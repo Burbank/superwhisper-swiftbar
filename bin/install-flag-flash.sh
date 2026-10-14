@@ -23,6 +23,17 @@ else
 fi
 SETTINGS_BIN="$SETTINGS_APP/Contents/MacOS/Language Flash"
 
+echo "Language Flash goes in the main Applications folder, not Utilities."
+echo "Destination: $SETTINGS_APP"
+case "$ROOT" in
+  *"/Mobile Documents/"*|*"CloudDocs"*)
+    echo "This project folder is in iCloud. git pull here can fail with: mmap failed: Operation canceled"
+    echo "Install from a copy outside iCloud:"
+    echo "  git clone --branch cursor/dictation-flag-flash-f3a2 --single-branch https://github.com/Burbank/superwhisper-swiftbar.git \"\$HOME/.local/src/superwhisper-swiftbar\""
+    echo "  \"\$HOME/.local/src/superwhisper-swiftbar/bin/install-flag-flash.sh\""
+    ;;
+esac
+
 render_icon() {
   local dest_app="$1"
   local work iconset pair size name

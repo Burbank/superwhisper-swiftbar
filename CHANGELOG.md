@@ -6,6 +6,7 @@
 - Preview buttons flash Dutch, English, or Spanish with the settings just saved
 - Start restarts the login item when the flash is not running
 - The installer replaces the background app and starts it again, including after the earlier `Bootstrap failed: 5` error
+- Language Flash is installed in the main Applications folder, not Utilities. Install the git folder from outside iCloud; a pull inside iCloud can fail with `mmap failed: Operation canceled`
 
 ## 2026-10-12
 

@@ -96,11 +96,21 @@ The flag uses the same active mode as the menu bar:
 | `es` | Spain |
 | anything else | the mode name, in large type |
 
+Keep this git folder outside iCloud. A pull inside `Mobile Documents` can stop with `mmap failed: Operation canceled`, and then the installer never runs. On this Mac, use a local copy:
+
+```bash
+mkdir -p "$HOME/.local/src"
+git clone --branch cursor/dictation-flag-flash-f3a2 --single-branch https://github.com/Burbank/superwhisper-swiftbar.git "$HOME/.local/src/superwhisper-swiftbar"
+"$HOME/.local/src/superwhisper-swiftbar/bin/install-flag-flash.sh"
+```
+
+From a copy that is already on disk:
+
 ```bash
 ./bin/install-flag-flash.sh
 ```
 
-The installer puts **Language Flash** in `/Applications` (or `~/Applications` if that folder is not writable) and opens it. The icon is a Dutch flag with a small American flag on the corner. The window shows whether the background flash is running. If it says **Not running**, click **Start**.
+The installer puts **Language Flash** in the main Applications folder, `/Applications`, next to your other apps. It does not go in Utilities. If that folder is not writable, it uses `~/Applications` instead, and the script prints the path. The icon is a Dutch flag with a small American flag on the corner. The window shows whether the background flash is running. If it says **Not running**, click **Start**.
 
 Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview Dutch**, **Preview English**, and **Preview Spanish** flash the flag on screen with the current settings.
 
