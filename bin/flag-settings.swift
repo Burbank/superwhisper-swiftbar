@@ -16,6 +16,30 @@ private struct FlagSettings: Codable {
     var widthPercent: Double = 10
     var opacityPercent: Double = 50
     var seconds: Double = 0.3
+    /// Mode key or language code, lowercased, to a country code such as FR.
+    var flags: [String: String] = [:]
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        widthPercent = try container.decodeIfPresent(Double.self, forKey: .widthPercent) ?? 10
+        opacityPercent = try container.decodeIfPresent(Double.self, forKey: .opacityPercent) ?? 50
+        seconds = try container.decodeIfPresent(Double.self, forKey: .seconds) ?? 0.3
+        flags = try container.decodeIfPresent([String: String].self, forKey: .flags) ?? [:]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case widthPercent, opacityPercent, seconds, flags
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(widthPercent, forKey: .widthPercent)
+        try container.encode(opacityPercent, forKey: .opacityPercent)
+        try container.encode(seconds, forKey: .seconds)
+        try container.encode(flags, forKey: .flags)
+    }
 
     static func load() -> FlagSettings {
         let url = settingsFileURL()
@@ -49,6 +73,7 @@ private struct FlagSettings: Codable {
         abs(widthPercent - other.widthPercent) < 0.001
             && abs(opacityPercent - other.opacityPercent) < 0.001
             && abs(seconds - other.seconds) < 0.001
+            && flags == other.flags
     }
 }
 
@@ -272,6 +297,190 @@ private final class DotView: NSView {
     }
 }
 
+private struct FlashMode {
+    var key: String
+    var name: String
+    var language: String
+}
+
+private let countryCodes = [
+    "NL", "US", "GB", "ES", "FR", "DE", "IT", "PT", "BR", "SE", "NO", "DK", "FI",
+    "PL", "CZ", "AT", "CH", "BE", "IE", "GR", "TR", "RU", "UA", "JP", "CN", "KR",
+    "IN", "TH", "VN", "ID", "SA", "AE", "IL", "ZA", "EG", "MX", "AR", "CA", "AU", "NZ",
+]
+
+private func builtinCountry(language: String, key: String) -> String {
+    let lang = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+    let token = lang.isEmpty ? key.lowercased() : lang
+    switch token {
+    case "nl", "nld", "dutch", "super": return "NL"
+    case "en", "eng", "english", "us", "usa", "default": return "US"
+    case "es", "spa", "spanish": return "ES"
+    default: return ""
+    }
+}
+
+private func normalizeCountry(_ raw: String) -> String? {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return nil }
+    let upper = trimmed.uppercased()
+    if upper == "UK" { return "GB" }
+    if upper == "USA" { return "US" }
+    guard upper.count == 2, upper.allSatisfy({ $0.isLetter }) else { return nil }
+    return upper
+}
+
+private func loadFlashModes() -> [FlashMode] {
+    let domain = "com.superduper.superwhisper" as CFString
+    CFPreferencesAppSynchronize(domain)
+    func pref(_ key: String) -> String? {
+        guard let value = CFPreferencesCopyAppValue(key as CFString, domain) as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    var candidates: [URL] = []
+    if let parent = pref("appFolderDirectory") {
+        let parentURL = URL(fileURLWithPath: (parent as NSString).expandingTildeInPath)
+        candidates.append(parentURL.appendingPathComponent("superwhisper"))
+        candidates.append(parentURL)
+    }
+    candidates.append(home.appendingPathComponent("Documents/superwhisper"))
+    candidates.append(home.appendingPathComponent("superwhisper"))
+    let folder = candidates.first { url in
+        var isDirectory: ObjCBool = false
+        let modes = url.appendingPathComponent("modes")
+        return FileManager.default.fileExists(atPath: modes.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+    guard let folder else { return [] }
+    let directory = folder.appendingPathComponent("modes")
+    guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+        return []
+    }
+    var modes: [FlashMode] = []
+    for file in files where file.pathExtension.lowercased() == "json" {
+        guard
+            let data = try? Data(contentsOf: file),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { continue }
+        let filename = file.deletingPathExtension().lastPathComponent
+        let key = (object["key"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? filename
+        let name = (object["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? key
+        let language = object["language"] as? String ?? ""
+        modes.append(FlashMode(key: key, name: name, language: language))
+    }
+    return modes.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+}
+
+private final class LanguageChooser: NSObject, NSComboBoxDelegate {
+    static let shared = LanguageChooser()
+
+    private var panel: NSPanel?
+    private var rows: [(key: String, box: NSComboBox)] = []
+    private var onPreview: ((String) -> Void)?
+
+    func show(relativeTo parent: NSWindow?, preview: @escaping (String) -> Void) {
+        onPreview = preview
+        let modes = loadFlashModes()
+        let rowHeight: CGFloat = 36
+        let height = min(520, 92 + CGFloat(max(modes.count, 1)) * rowHeight)
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: height),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Your languages"
+        panel.isReleasedWhenClosed = false
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: height))
+        panel.contentView = content
+
+        let intro = NSTextField(wrappingLabelWithString: "Pick a country code for each Superwhisper mode. NL, US, and ES use the drawn flags. Any other code, such as FR or DE, uses that country’s flag. Leave a row as it is to keep the built-in choice.")
+        intro.font = NSFont.systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = 448
+        intro.frame = NSRect(x: 16, y: height - 62, width: 448, height: 50)
+        content.addSubview(intro)
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 8, width: 480, height: height - 74))
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        let documentHeight = max(rowHeight, CGFloat(modes.count) * rowHeight)
+        let document = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: documentHeight))
+        rows = []
+        let saved = FlagSettings.load().flags
+        if modes.isEmpty {
+            let empty = NSTextField(labelWithString: "No Superwhisper modes were found.")
+            empty.frame = NSRect(x: 16, y: 8, width: 420, height: 20)
+            document.addSubview(empty)
+        }
+        var y = documentHeight - rowHeight
+        for (index, mode) in modes.enumerated() {
+            let language = mode.language.isEmpty ? mode.key : mode.language
+            let label = NSTextField(labelWithString: "\(mode.name)  ·  \(language)")
+            label.frame = NSRect(x: 16, y: y + 8, width: 230, height: 20)
+            label.lineBreakMode = .byTruncatingTail
+            document.addSubview(label)
+
+            let box = NSComboBox(frame: NSRect(x: 250, y: y + 4, width: 90, height: 26))
+            box.addItems(withObjectValues: countryCodes)
+            box.completes = true
+            box.numberOfVisibleItems = 12
+            let lang = mode.language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+            box.stringValue = saved[mode.key.lowercased()]
+                ?? (lang.isEmpty ? nil : saved[lang])
+                ?? builtinCountry(language: mode.language, key: mode.key)
+            box.delegate = self
+            document.addSubview(box)
+            rows.append((key: mode.key, box: box))
+
+            let button = NSButton(title: "Preview", target: self, action: #selector(previewRow(_:)))
+            button.tag = index
+            button.bezelStyle = .rounded
+            button.frame = NSRect(x: 352, y: y + 2, width: 92, height: 28)
+            document.addSubview(button)
+            y -= rowHeight
+        }
+        scroll.documentView = document
+        content.addSubview(scroll)
+        self.panel = panel
+        panel.center()
+        if let parent {
+            parent.addChildWindow(panel, ordered: .above)
+        }
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    func comboBoxSelectionDidChange(_ notification: Notification) {
+        saveRows()
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        saveRows()
+    }
+
+    private func saveRows() {
+        var settings = FlagSettings.load()
+        for row in rows {
+            let key = row.key.lowercased()
+            if let code = normalizeCountry(row.box.stringValue) {
+                settings.flags[key] = code
+            } else {
+                settings.flags.removeValue(forKey: key)
+            }
+        }
+        try? settings.save()
+    }
+
+    @objc private func previewRow(_ sender: NSButton) {
+        guard rows.indices.contains(sender.tag) else { return }
+        saveRows()
+        let code = normalizeCountry(rows[sender.tag].box.stringValue) ?? "NL"
+        onPreview?(code)
+    }
+}
+
 private final class SettingsApp: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private let preview = ScreenPreview(frame: .zero)
@@ -398,6 +607,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             ("Preview Dutch", #selector(previewDutch)),
             ("Preview English", #selector(previewEnglish)),
             ("Preview Spanish", #selector(previewSpanish)),
+            ("Languages…", #selector(showLanguages)),
         ] as [(String, Selector)] {
             let button = NSButton(title: title, target: self, action: action)
             button.bezelStyle = .rounded
@@ -471,7 +681,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     }
 
     private func currentSettings() -> FlagSettings {
-        var settings = FlagSettings()
+        var settings = FlagSettings.load()
         settings.widthPercent = sizeSlider.doubleValue.rounded()
         settings.opacityPercent = opacitySlider.doubleValue.rounded()
         settings.seconds = ((timeSlider.doubleValue / 0.05).rounded() * 0.05 * 100).rounded() / 100
@@ -628,6 +838,33 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     @objc private func previewDutch() { flash(.netherlands) }
     @objc private func previewEnglish() { flash(.unitedStates) }
     @objc private func previewSpanish() { flash(.spain) }
+
+    @objc private func showLanguages() {
+        LanguageChooser.shared.show(relativeTo: window) { [weak self] code in
+            self?.previewCountry(code)
+        }
+    }
+
+    private func previewCountry(_ code: String) {
+        saveWork?.cancel()
+        save()
+        guard let executable = agentExecutable() else {
+            note.stringValue = "The background flash is not installed, so there is nothing to preview on screen."
+            note.textColor = .systemRed
+            return
+        }
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = ["--preview", code]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        do {
+            try task.run()
+        } catch {
+            note.stringValue = "Could not preview: \(error.localizedDescription)"
+            note.textColor = .systemRed
+        }
+    }
 
     private func ensureLoginItem() {
         if #available(macOS 13.0, *), embeddedAgentPlistExists() {

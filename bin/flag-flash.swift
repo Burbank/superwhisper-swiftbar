@@ -19,6 +19,30 @@ private struct FlagSettings: Codable {
     var widthPercent: Double = 10
     var opacityPercent: Double = 50
     var seconds: Double = 0.3
+    /// Mode key or language code, lowercased, to a country code such as FR or an emoji flag.
+    var flags: [String: String] = [:]
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        widthPercent = try container.decodeIfPresent(Double.self, forKey: .widthPercent) ?? 10
+        opacityPercent = try container.decodeIfPresent(Double.self, forKey: .opacityPercent) ?? 50
+        seconds = try container.decodeIfPresent(Double.self, forKey: .seconds) ?? 0.3
+        flags = try container.decodeIfPresent([String: String].self, forKey: .flags) ?? [:]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case widthPercent, opacityPercent, seconds, flags
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(widthPercent, forKey: .widthPercent)
+        try container.encode(opacityPercent, forKey: .opacityPercent)
+        try container.encode(seconds, forKey: .seconds)
+        try container.encode(flags, forKey: .flags)
+    }
 
     var fadeIn: TimeInterval { min(0.04, seconds * 0.13) }
     var fadeOut: TimeInterval { fadeIn }
@@ -112,18 +136,61 @@ private enum FlagKind {
     case netherlands
     case unitedStates
     case spain
+    case emoji(String)
     case label(String)
 
     var aspect: CGFloat {
         switch self {
-        case .netherlands, .spain: return 1.5
+        case .netherlands, .spain, .emoji: return 1.5
         case .unitedStates: return 1.9
         case .label: return 2.4
         }
     }
 }
 
+private func flagEmoji(countryCode: String) -> String {
+    let letters = countryCode.uppercased()
+    guard letters.count == 2 else { return countryCode }
+    var scalars = String.UnicodeScalarView()
+    for scalar in letters.unicodeScalars {
+        guard let regional = Unicode.Scalar(127397 + scalar.value) else { return countryCode }
+        scalars.append(regional)
+    }
+    return String(scalars)
+}
+
+private func kind(forAssigned token: String) -> FlagKind {
+    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+    switch trimmed.uppercased() {
+    case "NL":
+        return .netherlands
+    case "US":
+        return .unitedStates
+    case "ES":
+        return .spain
+    default:
+        if trimmed.count == 2, trimmed.allSatisfy({ $0.isLetter }) {
+            return .emoji(flagEmoji(countryCode: trimmed))
+        }
+        return trimmed.isEmpty ? .label("?") : .emoji(trimmed)
+    }
+}
+
+private func assignedFlag(language: String, key: String, name: String) -> String? {
+    let flags = FlagSettings.load().flags
+    let lang = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+    for candidate in [key.lowercased(), lang, name.lowercased()] where !candidate.isEmpty {
+        if let value = flags[candidate]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+            return value
+        }
+    }
+    return nil
+}
+
 private func flagKind(language: String, key: String, name: String) -> FlagKind {
+    if let assigned = assignedFlag(language: language, key: key, name: name) {
+        return kind(forAssigned: assigned)
+    }
     let lang = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
     let token = lang.isEmpty ? key.lowercased() : lang
     switch token {
@@ -148,7 +215,9 @@ private func previewKind(_ token: String) -> FlagKind? {
     case "es", "spa", "spanish":
         return .spain
     default:
-        return nil
+        let upper = token.uppercased()
+        guard upper.count == 2, upper.allSatisfy({ $0.isLetter }) else { return nil }
+        return kind(forAssigned: upper)
     }
 }
 
@@ -169,9 +238,34 @@ private enum FlagDrawing {
             ], in: rect)
         case .unitedStates:
             unitedStates(in: rect)
+        case .emoji(let text):
+            emoji(text, in: rect)
         case .label(let text):
             label(text, in: rect)
         }
+    }
+
+    private static func emoji(_ text: String, in rect: NSRect) {
+        let size = min(rect.width, rect.height) * 0.92
+        let font = NSFont(name: "Apple Color Emoji", size: size) ?? NSFont.systemFont(ofSize: size)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraph,
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let bounds = string.boundingRect(
+            with: NSSize(width: rect.width, height: rect.height * 2),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        let textRect = NSRect(
+            x: rect.midX - rect.width / 2,
+            y: rect.midY - bounds.height / 2,
+            width: rect.width,
+            height: bounds.height
+        )
+        string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
     }
 
     private static func stripes(_ bands: [(NSColor, CGFloat)], in rect: NSRect) {
@@ -1125,7 +1219,7 @@ private func previewArgument() -> FlagKind? {
     guard let index = arguments.firstIndex(of: "--preview") else { return nil }
     let token = arguments.indices.contains(index + 1) ? arguments[index + 1] : ""
     guard let kind = previewKind(token) else {
-        fputs("Usage: flag-flash --preview nl|en|es\n", stderr)
+        fputs("Usage: flag-flash --preview nl|en|es|FR\n", stderr)
         exit(2)
     }
     return kind

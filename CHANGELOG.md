@@ -10,6 +10,7 @@
 - **Start when you log in** registers Language Flash in System Settings → General → Login Items & Extensions. The old hand-installed background job did not show the app name there
 - The installer keeps a single Language Flash app. It no longer builds a second copy in Application Support, and the settings window asks launchd once per refresh
 - Start registers the login job before restarting it, so launchd no longer reports that `com.burbank.superwhisper-flag-flash` is missing
+- **Languages…** lets each Superwhisper mode use its own country flag. Dutch, English, and Spanish stay the built-in flags. Any other country code, such as FR or DE, shows that flag
 
 ## 2026-10-12
 

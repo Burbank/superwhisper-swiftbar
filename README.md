@@ -94,7 +94,9 @@ The flag uses the same active mode as the menu bar:
 | `default` / `en` | United States |
 | `super` / `nl` | Netherlands |
 | `es` | Spain |
-| anything else | the mode name, in large type |
+| anything else | the mode name, until you choose a flag |
+
+Dutch, English, and Spanish are the built-in flags. In Language Flash, **Languages…** lists every Superwhisper mode. Choose a country code, such as `FR`, `DE`, or `GB`. `NL`, `US`, and `ES` stay the drawn flags. Any other code shows that country’s flag. The choice is saved with the mode and used the next time you dictate.
 
 Keep this git folder outside iCloud. A pull inside `Mobile Documents` can stop with `mmap failed: Operation canceled`, and then the installer never runs. On this Mac, use a local copy:
 
