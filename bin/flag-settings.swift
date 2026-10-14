@@ -97,6 +97,13 @@ private func runCommand(_ path: String, _ arguments: [String]) -> (Int32, String
     return (task.terminationStatus, output)
 }
 
+private func xmlText(_ value: String) -> String {
+    value
+        .replacingOccurrences(of: "&", with: "&amp;")
+        .replacingOccurrences(of: "<", with: "&lt;")
+        .replacingOccurrences(of: ">", with: "&gt;")
+}
+
 private func agentIsRunning() -> Bool {
     let uid = getuid()
     let result = runCommand("/bin/launchctl", ["print", "gui/\(uid)/\(launchAgentLabel)"])
@@ -664,16 +671,16 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
           </array>
           <key>ProgramArguments</key>
           <array>
-            <string>\(executable)</string>
+            <string>\(xmlText(executable))</string>
           </array>
           <key>RunAtLoad</key>
           <true/>
           <key>KeepAlive</key>
           <true/>
           <key>StandardErrorPath</key>
-          <string>\(log)</string>
+          <string>\(xmlText(log))</string>
           <key>StandardOutPath</key>
-          <string>\(log)</string>
+          <string>\(xmlText(log))</string>
           <key>BurbankManagedAgent</key>
           <true/>
         </dict>
