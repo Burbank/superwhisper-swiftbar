@@ -15,12 +15,44 @@ private let preferenceDomain = "com.superduper.superwhisper" as CFString
 private let samePressWindow: TimeInterval = 0.2
 private let launchAgentLabel = "com.burbank.superwhisper-flag-flash"
 
+private struct LanguageChoice: Codable, Equatable {
+    var word: String = ""
+    var flag: String = ""
+    var modeKey: String = ""
+
+    init(word: String = "", flag: String = "", modeKey: String = "") {
+        self.word = word
+        self.flag = flag
+        self.modeKey = modeKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        word = try container.decodeIfPresent(String.self, forKey: .word) ?? ""
+        flag = try container.decodeIfPresent(String.self, forKey: .flag) ?? ""
+        modeKey = try container.decodeIfPresent(String.self, forKey: .modeKey) ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case word, flag, modeKey
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(word, forKey: .word)
+        try container.encode(flag, forKey: .flag)
+        try container.encode(modeKey, forKey: .modeKey)
+    }
+}
+
 private struct FlagSettings: Codable {
     var widthPercent: Double = 10
     var opacityPercent: Double = 50
     var seconds: Double = 0.3
-    /// Mode key or language code, lowercased, to a country code such as FR or an emoji flag.
+    /// Older per-mode country codes. Ignored once `languages` has been saved.
     var flags: [String: String] = [:]
+    /// Nil until the user edits Languages. After that, this list is the only source of flags.
+    var languages: [LanguageChoice]?
 
     init() {}
 
@@ -30,10 +62,11 @@ private struct FlagSettings: Codable {
         opacityPercent = try container.decodeIfPresent(Double.self, forKey: .opacityPercent) ?? 50
         seconds = try container.decodeIfPresent(Double.self, forKey: .seconds) ?? 0.3
         flags = try container.decodeIfPresent([String: String].self, forKey: .flags) ?? [:]
+        languages = try container.decodeIfPresent([LanguageChoice].self, forKey: .languages)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case widthPercent, opacityPercent, seconds, flags
+        case widthPercent, opacityPercent, seconds, flags, languages
     }
 
     func encode(to encoder: Encoder) throws {
@@ -42,6 +75,9 @@ private struct FlagSettings: Codable {
         try container.encode(opacityPercent, forKey: .opacityPercent)
         try container.encode(seconds, forKey: .seconds)
         try container.encode(flags, forKey: .flags)
+        if let languages {
+            try container.encode(languages, forKey: .languages)
+        }
     }
 
     var fadeIn: TimeInterval { min(0.04, seconds * 0.13) }
@@ -81,11 +117,27 @@ private struct FlagSettings: Codable {
     func summary() -> String {
         let file = settingsFileURL().path
         return """
-        width    \(format(widthPercent))% of the screen
-        opacity  \(format(opacityPercent))%
-        shown    \(format(seconds)) seconds
-        file     \(file)
+        width     \(format(widthPercent))% of the screen
+        opacity   \(format(opacityPercent))%
+        shown     \(format(seconds)) seconds
+        languages \(languageSummary())
+        file      \(file)
         """
+    }
+
+    private func languageSummary() -> String {
+        guard let languages else {
+            return "Dutch, English, and Spanish, until you edit Languages"
+        }
+        if languages.isEmpty {
+            return "none"
+        }
+        return languages.map { choice in
+            let word = choice.word.trimmingCharacters(in: .whitespacesAndNewlines)
+            let flag = choice.flag.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = word.isEmpty ? (choice.modeKey.isEmpty ? "?" : choice.modeKey) : word
+            return flag.isEmpty ? name : "\(name) \(flag)"
+        }.joined(separator: ", ")
     }
 }
 
@@ -188,9 +240,59 @@ private func assignedFlag(language: String, key: String, name: String) -> String
 }
 
 private func flagKind(language: String, key: String, name: String) -> FlagKind {
+    let settings = FlagSettings.load()
+    if let languages = settings.languages {
+        return customFlagKind(languages, language: language, key: key, name: name)
+    }
     if let assigned = assignedFlag(language: language, key: key, name: name) {
         return kind(forAssigned: assigned)
     }
+    return builtinFlagKind(language: language, key: key, name: name)
+}
+
+private func customFlagKind(
+    _ languages: [LanguageChoice],
+    language: String,
+    key: String,
+    name: String
+) -> FlagKind {
+    let keyLower = key.lowercased()
+    let nameLower = name.lowercased()
+    let langFull = language.lowercased()
+    let lang = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+    let match = languages.first { choice in
+        let modeKey = choice.modeKey.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !modeKey.isEmpty {
+            return modeKey == keyLower
+        }
+        let word = choice.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !word.isEmpty else { return false }
+        if word == nameLower || word == keyLower || word == langFull { return true }
+        if !lang.isEmpty, word == lang { return true }
+        switch word {
+        case "dutch":
+            return ["nl", "nld", "dutch", "super"].contains(keyLower) || ["nl", "nld", "dutch"].contains(lang)
+        case "english":
+            return ["en", "eng", "english", "us", "usa", "default"].contains(keyLower)
+                || ["en", "eng", "english"].contains(lang)
+        case "spanish":
+            return ["es", "spa", "spanish"].contains(keyLower) || ["es", "spa", "spanish"].contains(lang)
+        default:
+            return false
+        }
+    }
+    if let match {
+        let flag = match.flag.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !flag.isEmpty { return kind(forAssigned: flag) }
+        let title = match.word.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shown = title.isEmpty ? (name.isEmpty ? key : name) : title
+        return .label(shown.isEmpty ? "?" : shown)
+    }
+    let title = name.isEmpty ? key : name
+    return .label(title.isEmpty ? "?" : title)
+}
+
+private func builtinFlagKind(language: String, key: String, name: String) -> FlagKind {
     let lang = language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
     let token = lang.isEmpty ? key.lowercased() : lang
     switch token {
@@ -207,7 +309,9 @@ private func flagKind(language: String, key: String, name: String) -> FlagKind {
 }
 
 private func previewKind(_ token: String) -> FlagKind? {
-    switch token.lowercased() {
+    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return nil }
+    switch trimmed.lowercased() {
     case "nl", "nld", "dutch", "super":
         return .netherlands
     case "en", "eng", "english", "us", "usa", "default":
@@ -215,9 +319,7 @@ private func previewKind(_ token: String) -> FlagKind? {
     case "es", "spa", "spanish":
         return .spain
     default:
-        let upper = token.uppercased()
-        guard upper.count == 2, upper.allSatisfy({ $0.isLetter }) else { return nil }
-        return kind(forAssigned: upper)
+        return kind(forAssigned: trimmed)
     }
 }
 

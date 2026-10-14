@@ -2,15 +2,16 @@
 
 ## 2026-10-14
 
+- **Languages…** is a list you own. Rename, replace, or remove Dutch, English, and Spanish, and add any other language. After you edit the list, those three are no longer built in
 - **Language Flash** settings window in Applications, with a Dutch-and-American flag icon. Sliders set size, opacity, and time on screen, and the window shows whether the background flash is running
-- Preview buttons flash Dutch, English, or Spanish with the settings just saved
+- Preview flashes the first language in the list. Each language row has its own Preview
 - Start restarts the login item when the flash is not running
 - The installer replaces the background app and starts it again, including after the earlier `Bootstrap failed: 5` error
 - Language Flash is installed in the main Applications folder, not Utilities. Install the git folder from outside iCloud; a pull inside iCloud can fail with `mmap failed: Operation canceled`
 - **Start when you log in** registers Language Flash in System Settings → General → Login Items & Extensions. The old hand-installed background job did not show the app name there
 - The installer keeps a single Language Flash app. It no longer builds a second copy in Application Support, and the settings window asks launchd once per refresh
 - Start registers the login job before restarting it, so launchd no longer reports that `com.burbank.superwhisper-flag-flash` is missing
-- **Languages…** lets each Superwhisper mode use its own country flag. Dutch, English, and Spanish stay the built-in flags. Any other country code, such as FR or DE, shows that flag
+- An earlier **Languages…** only attached a country code to each Superwhisper mode and left Dutch, English, and Spanish built in
 
 ## 2026-10-12
 

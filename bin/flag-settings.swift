@@ -3,7 +3,7 @@
 //
 // Writes the same file the background flash reads on the next dictation:
 // ~/Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json
-// Keys match FlagSettings in flag-flash.swift: widthPercent, opacityPercent, seconds.
+// Keys match FlagSettings in flag-flash.swift: widthPercent, opacityPercent, seconds, languages.
 
 import AppKit
 import Darwin
@@ -12,12 +12,44 @@ import ServiceManagement
 private let launchAgentLabel = "com.burbank.superwhisper-flag-flash"
 private let agentPlistName = "com.burbank.superwhisper-flag-flash.plist"
 
+private struct LanguageChoice: Codable, Equatable {
+    var word: String = ""
+    var flag: String = ""
+    var modeKey: String = ""
+
+    init(word: String = "", flag: String = "", modeKey: String = "") {
+        self.word = word
+        self.flag = flag
+        self.modeKey = modeKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        word = try container.decodeIfPresent(String.self, forKey: .word) ?? ""
+        flag = try container.decodeIfPresent(String.self, forKey: .flag) ?? ""
+        modeKey = try container.decodeIfPresent(String.self, forKey: .modeKey) ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case word, flag, modeKey
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(word, forKey: .word)
+        try container.encode(flag, forKey: .flag)
+        try container.encode(modeKey, forKey: .modeKey)
+    }
+}
+
 private struct FlagSettings: Codable {
     var widthPercent: Double = 10
     var opacityPercent: Double = 50
     var seconds: Double = 0.3
-    /// Mode key or language code, lowercased, to a country code such as FR.
+    /// Older per-mode country codes. Ignored once `languages` has been saved.
     var flags: [String: String] = [:]
+    /// Nil until the user edits Languages. After that, this list is the only source of flags.
+    var languages: [LanguageChoice]?
 
     init() {}
 
@@ -27,10 +59,11 @@ private struct FlagSettings: Codable {
         opacityPercent = try container.decodeIfPresent(Double.self, forKey: .opacityPercent) ?? 50
         seconds = try container.decodeIfPresent(Double.self, forKey: .seconds) ?? 0.3
         flags = try container.decodeIfPresent([String: String].self, forKey: .flags) ?? [:]
+        languages = try container.decodeIfPresent([LanguageChoice].self, forKey: .languages)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case widthPercent, opacityPercent, seconds, flags
+        case widthPercent, opacityPercent, seconds, flags, languages
     }
 
     func encode(to encoder: Encoder) throws {
@@ -39,6 +72,9 @@ private struct FlagSettings: Codable {
         try container.encode(opacityPercent, forKey: .opacityPercent)
         try container.encode(seconds, forKey: .seconds)
         try container.encode(flags, forKey: .flags)
+        if let languages {
+            try container.encode(languages, forKey: .languages)
+        }
     }
 
     static func load() -> FlagSettings {
@@ -74,6 +110,7 @@ private struct FlagSettings: Codable {
             && abs(opacityPercent - other.opacityPercent) < 0.001
             && abs(seconds - other.seconds) < 0.001
             && flags == other.flags
+            && languages == other.languages
     }
 }
 
@@ -140,24 +177,52 @@ private func agentProcessStatus() -> AgentProcessStatus {
     return AgentProcessStatus(loaded: loaded, running: loaded && result.1.contains("state = running"))
 }
 
-private enum PreviewKind: Int {
+private enum DrawnFlag {
     case netherlands
     case unitedStates
     case spain
-
-    var token: String {
-        switch self {
-        case .netherlands: return "nl"
-        case .unitedStates: return "en"
-        case .spain: return "es"
-        }
-    }
+    case emoji(String)
+    case placeholder
 
     var aspect: CGFloat {
         switch self {
         case .unitedStates: return 1.9
-        case .netherlands, .spain: return 1.5
+        case .placeholder: return 2.2
+        case .netherlands, .spain, .emoji: return 1.5
         }
+    }
+}
+
+private func flagEmoji(countryCode: String) -> String {
+    let letters = countryCode.uppercased()
+    guard letters.count == 2 else { return countryCode }
+    var scalars = String.UnicodeScalarView()
+    for scalar in letters.unicodeScalars {
+        guard let regional = Unicode.Scalar(127397 + scalar.value) else { return countryCode }
+        scalars.append(regional)
+    }
+    return String(scalars)
+}
+
+private func drawnFlag(for sample: String) -> DrawnFlag {
+    let trimmed = sample.trimmingCharacters(in: .whitespacesAndNewlines)
+    switch trimmed.uppercased() {
+    case "NL":
+        return .netherlands
+    case "US", "USA":
+        return .unitedStates
+    case "ES":
+        return .spain
+    case "":
+        return .placeholder
+    default:
+        if trimmed.count == 2, trimmed.allSatisfy({ $0.isLetter }) {
+            return .emoji(flagEmoji(countryCode: trimmed))
+        }
+        if trimmed.unicodeScalars.contains(where: { $0.value > 127 }) {
+            return .emoji(trimmed)
+        }
+        return .placeholder
     }
 }
 
@@ -193,7 +258,8 @@ private func starPath(center: CGPoint, radius: CGFloat) -> NSBezierPath {
 }
 
 private final class ScreenPreview: NSView {
-    var kind: PreviewKind = .unitedStates {
+    /// Country code, emoji, or empty. The picture follows the user's first language.
+    var sample: String = "" {
         didSet { needsDisplay = true }
     }
     var widthPercent: CGFloat = 10 {
@@ -208,13 +274,14 @@ private final class ScreenPreview: NSView {
         nsColor(0x2A2E38).setFill()
         screen.fill()
 
+        let flagKind = drawnFlag(for: sample)
         let inset = bounds.insetBy(dx: 16, dy: 16)
         var width = inset.width * widthPercent / 100
-        var height = width / kind.aspect
+        var height = width / flagKind.aspect
         let maxHeight = inset.height * 0.86
         if height > maxHeight {
             height = maxHeight
-            width = height * kind.aspect
+            width = height * flagKind.aspect
         }
         let flag = NSRect(
             x: bounds.midX - width / 2,
@@ -225,11 +292,11 @@ private final class ScreenPreview: NSView {
         guard let context = NSGraphicsContext.current else { return }
         context.saveGraphicsState()
         context.cgContext.setAlpha(opacity)
-        drawFlag(in: flag)
+        drawFlag(flagKind, in: flag)
         context.restoreGraphicsState()
     }
 
-    private func drawFlag(in rect: NSRect) {
+    private func drawFlag(_ kind: DrawnFlag, in rect: NSRect) {
         switch kind {
         case .netherlands:
             stripes([(nsColor(0xAE1C28), 1), (NSColor.white, 1), (nsColor(0x21468B), 1)], in: rect)
@@ -237,7 +304,35 @@ private final class ScreenPreview: NSView {
             stripes([(nsColor(0xAA151B), 1), (nsColor(0xF1BF00), 2), (nsColor(0xAA151B), 1)], in: rect)
         case .unitedStates:
             unitedStates(in: rect)
+        case .emoji(let text):
+            emoji(text, in: rect)
+        case .placeholder:
+            NSColor.white.withAlphaComponent(0.16).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
         }
+    }
+
+    private func emoji(_ text: String, in rect: NSRect) {
+        let size = min(rect.width, rect.height) * 0.92
+        let font = NSFont(name: "Apple Color Emoji", size: size) ?? NSFont.systemFont(ofSize: size)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraph,
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let bounds = string.boundingRect(
+            with: NSSize(width: rect.width, height: rect.height * 2),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        let textRect = NSRect(
+            x: rect.midX - rect.width / 2,
+            y: rect.midY - bounds.height / 2,
+            width: rect.width,
+            height: bounds.height
+        )
+        string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading])
     }
 
     private func stripes(_ bands: [(NSColor, CGFloat)], in rect: NSRect) {
@@ -320,14 +415,31 @@ private func builtinCountry(language: String, key: String) -> String {
     }
 }
 
-private func normalizeCountry(_ raw: String) -> String? {
+private func displayWord(for mode: FlashMode) -> String {
+    let lang = mode.language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+    let token = lang.isEmpty ? mode.key.lowercased() : lang
+    switch token {
+    case "nl", "nld", "dutch", "super": return "Dutch"
+    case "en", "eng", "english", "us", "usa", "default": return "English"
+    case "es", "spa", "spanish": return "Spanish"
+    default: return mode.name
+    }
+}
+
+private func normalizeFlag(_ raw: String) -> String? {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if trimmed.isEmpty { return nil }
     let upper = trimmed.uppercased()
     if upper == "UK" { return "GB" }
     if upper == "USA" { return "US" }
-    guard upper.count == 2, upper.allSatisfy({ $0.isLetter }) else { return nil }
-    return upper
+    if upper.count == 2, upper.allSatisfy({ $0.isLetter }) { return upper }
+    if trimmed.unicodeScalars.contains(where: { $0.value > 127 }) { return trimmed }
+    return nil
+}
+
+private func sampleFlag(from settings: FlagSettings) -> String {
+    let languages = settings.languages ?? startingLanguages()
+    return languages.compactMap { normalizeFlag($0.flag) }.first ?? ""
 }
 
 private func loadFlashModes() -> [FlashMode] {
@@ -372,111 +484,240 @@ private func loadFlashModes() -> [FlashMode] {
     return modes.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 }
 
-private final class LanguageChooser: NSObject, NSComboBoxDelegate {
-    static let shared = LanguageChooser()
+private func savedFlag(for mode: FlashMode, flags: [String: String]) -> String {
+    let lang = mode.language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
+    let candidates = [mode.key.lowercased(), lang, mode.name.lowercased()]
+    for candidate in candidates where !candidate.isEmpty {
+        if let value = flags[candidate], let code = normalizeFlag(value) {
+            return code
+        }
+    }
+    return builtinCountry(language: mode.language, key: mode.key)
+}
 
-    private var panel: NSPanel?
-    private var rows: [(key: String, box: NSComboBox)] = []
-    private var onPreview: ((String) -> Void)?
-
-    func show(relativeTo parent: NSWindow?, preview: @escaping (String) -> Void) {
-        onPreview = preview
-        let modes = loadFlashModes()
-        let rowHeight: CGFloat = 36
-        let height = min(520, 92 + CGFloat(max(modes.count, 1)) * rowHeight)
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: height),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
+private func startingLanguages() -> [LanguageChoice] {
+    let settings = FlagSettings.load()
+    if let languages = settings.languages {
+        return languages
+    }
+    let modes = loadFlashModes()
+    if modes.isEmpty {
+        return [
+            LanguageChoice(word: "Dutch", flag: "NL", modeKey: ""),
+            LanguageChoice(word: "English", flag: "US", modeKey: ""),
+            LanguageChoice(word: "Spanish", flag: "ES", modeKey: ""),
+        ]
+    }
+    return modes.map { mode in
+        LanguageChoice(
+            word: displayWord(for: mode),
+            flag: savedFlag(for: mode, flags: settings.flags),
+            modeKey: mode.key
         )
-        panel.title = "Your languages"
-        panel.isReleasedWhenClosed = false
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: height))
-        panel.contentView = content
+    }
+}
 
-        let intro = NSTextField(wrappingLabelWithString: "Pick a country code for each Superwhisper mode. NL, US, and ES use the drawn flags. Any other code, such as FR or DE, uses that country’s flag. Leave a row as it is to keep the built-in choice.")
-        intro.font = NSFont.systemFont(ofSize: 12)
-        intro.textColor = .secondaryLabelColor
-        intro.preferredMaxLayoutWidth = 448
-        intro.frame = NSRect(x: 16, y: height - 62, width: 448, height: 50)
-        content.addSubview(intro)
+private final class LanguageEditor: NSObject, NSTextFieldDelegate, NSComboBoxDelegate {
+    static let shared = LanguageEditor()
 
-        let scroll = NSScrollView(frame: NSRect(x: 0, y: 8, width: 480, height: height - 74))
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
-        scroll.drawsBackground = false
-        let documentHeight = max(rowHeight, CGFloat(modes.count) * rowHeight)
-        let document = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: documentHeight))
-        rows = []
-        let saved = FlagSettings.load().flags
-        if modes.isEmpty {
-            let empty = NSTextField(labelWithString: "No Superwhisper modes were found.")
-            empty.frame = NSRect(x: 16, y: 8, width: 420, height: 20)
-            document.addSubview(empty)
+    private let rowHeight: CGFloat = 36
+    private var panel: NSPanel?
+    private var scroll: NSScrollView?
+    private var entries: [LanguageChoice] = []
+    private var wordFields: [NSTextField] = []
+    private var flagFields: [NSComboBox] = []
+    private var onPreview: ((String) -> Void)?
+    private var onChange: (() -> Void)?
+    private var focusNewRow = false
+
+    func show(relativeTo parent: NSWindow?, preview: @escaping (String) -> Void, changed: @escaping () -> Void) {
+        onPreview = preview
+        onChange = changed
+        entries = startingLanguages()
+        if panel == nil {
+            buildPanel()
         }
-        var y = documentHeight - rowHeight
-        for (index, mode) in modes.enumerated() {
-            let language = mode.language.isEmpty ? mode.key : mode.language
-            let label = NSTextField(labelWithString: "\(mode.name)  ·  \(language)")
-            label.frame = NSRect(x: 16, y: y + 8, width: 230, height: 20)
-            label.lineBreakMode = .byTruncatingTail
-            document.addSubview(label)
-
-            let box = NSComboBox(frame: NSRect(x: 250, y: y + 4, width: 90, height: 26))
-            box.addItems(withObjectValues: countryCodes)
-            box.completes = true
-            box.numberOfVisibleItems = 12
-            let lang = mode.language.split(separator: "-").first.map { String($0).lowercased() } ?? ""
-            box.stringValue = saved[mode.key.lowercased()]
-                ?? (lang.isEmpty ? nil : saved[lang])
-                ?? builtinCountry(language: mode.language, key: mode.key)
-            box.delegate = self
-            document.addSubview(box)
-            rows.append((key: mode.key, box: box))
-
-            let button = NSButton(title: "Preview", target: self, action: #selector(previewRow(_:)))
-            button.tag = index
-            button.bezelStyle = .rounded
-            button.frame = NSRect(x: 352, y: y + 2, width: 92, height: 28)
-            document.addSubview(button)
-            y -= rowHeight
-        }
-        scroll.documentView = document
-        content.addSubview(scroll)
-        self.panel = panel
-        panel.center()
-        if let parent {
+        reloadRows()
+        guard let panel else { return }
+        if panel.parent == nil, let parent {
             parent.addChildWindow(panel, ordered: .above)
         }
         panel.makeKeyAndOrderFront(nil)
     }
 
-    func comboBoxSelectionDidChange(_ notification: Notification) {
-        saveRows()
+    private func buildPanel() {
+        let width: CGFloat = 560
+        let height: CGFloat = 460
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Languages"
+        panel.isReleasedWhenClosed = false
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        panel.contentView = content
+
+        let intro = NSTextField(wrappingLabelWithString: "Change any language. Edit the name, edit the flag, remove a row, or add one. Dutch, English, and Spanish are only a starting list. Once you change this list, those three are no longer built in. A row keeps the Superwhisper mode it started from. A new row matches a mode with the same name.")
+        intro.font = NSFont.systemFont(ofSize: 12)
+        intro.textColor = .secondaryLabelColor
+        intro.preferredMaxLayoutWidth = width - 32
+        intro.frame = NSRect(x: 16, y: height - 86, width: width - 32, height: 70)
+        content.addSubview(intro)
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 52, width: width, height: height - 148))
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        content.addSubview(scroll)
+        self.scroll = scroll
+
+        let add = NSButton(title: "Add language", target: self, action: #selector(addLanguage))
+        add.bezelStyle = .rounded
+        add.frame = NSRect(x: 16, y: 12, width: 140, height: 32)
+        content.addSubview(add)
+
+        panel.center()
+        self.panel = panel
     }
 
-    func controlTextDidEndEditing(_ obj: Notification) {
-        saveRows()
+    private func reloadRows() {
+        guard let scroll else { return }
+        let header: CGFloat = 24
+        let count = max(entries.count, 1)
+        let documentHeight = header + CGFloat(count) * rowHeight + 8
+        let document = NSView(frame: NSRect(x: 0, y: 0, width: 540, height: documentHeight))
+        wordFields = []
+        flagFields = []
+
+        let nameHeader = NSTextField(labelWithString: "Language")
+        nameHeader.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        nameHeader.textColor = .secondaryLabelColor
+        nameHeader.frame = NSRect(x: 16, y: documentHeight - 20, width: 220, height: 16)
+        document.addSubview(nameHeader)
+        let flagHeader = NSTextField(labelWithString: "Flag")
+        flagHeader.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        flagHeader.textColor = .secondaryLabelColor
+        flagHeader.frame = NSRect(x: 248, y: documentHeight - 20, width: 80, height: 16)
+        document.addSubview(flagHeader)
+
+        if entries.isEmpty {
+            let empty = NSTextField(labelWithString: "No languages yet. Add one, or dictation shows the mode name.")
+            empty.textColor = .secondaryLabelColor
+            empty.frame = NSRect(x: 16, y: documentHeight - header - 24, width: 500, height: 20)
+            document.addSubview(empty)
+        }
+
+        var y = documentHeight - header - rowHeight
+        for (index, entry) in entries.enumerated() {
+            let word = NSTextField(frame: NSRect(x: 16, y: y + 4, width: 220, height: 26))
+            word.stringValue = entry.word
+            word.placeholderString = "Language"
+            word.font = NSFont.systemFont(ofSize: 13)
+            word.delegate = self
+            document.addSubview(word)
+            wordFields.append(word)
+
+            let box = NSComboBox(frame: NSRect(x: 248, y: y + 4, width: 88, height: 26))
+            box.addItems(withObjectValues: countryCodes)
+            box.completes = true
+            box.numberOfVisibleItems = 12
+            box.placeholderString = "Flag"
+            box.font = NSFont.systemFont(ofSize: 13)
+            box.stringValue = entry.flag
+            box.delegate = self
+            document.addSubview(box)
+            flagFields.append(box)
+
+            let preview = NSButton(title: "Preview", target: self, action: #selector(previewRow(_:)))
+            preview.tag = index
+            preview.bezelStyle = .rounded
+            preview.frame = NSRect(x: 346, y: y + 3, width: 84, height: 28)
+            document.addSubview(preview)
+
+            let remove = NSButton(title: "Remove", target: self, action: #selector(removeRow(_:)))
+            remove.tag = index
+            remove.bezelStyle = .rounded
+            remove.frame = NSRect(x: 438, y: y + 3, width: 84, height: 28)
+            document.addSubview(remove)
+            y -= rowHeight
+        }
+        scroll.documentView = document
+        if focusNewRow, let field = wordFields.last {
+            focusNewRow = false
+            panel?.makeFirstResponder(field)
+        }
     }
 
-    private func saveRows() {
-        var settings = FlagSettings.load()
-        for row in rows {
-            let key = row.key.lowercased()
-            if let code = normalizeCountry(row.box.stringValue) {
-                settings.flags[key] = code
-            } else {
-                settings.flags.removeValue(forKey: key)
+    @objc func controlTextDidChange(_ obj: Notification) {
+        commit(saveEmptyRows: false)
+    }
+
+    @objc func comboBoxSelectionDidChange(_ notification: Notification) {
+        guard let box = notification.object as? NSComboBox else { return }
+        let index = box.indexOfSelectedItem
+        if index >= 0, let value = box.objectValueOfSelectedItem as? String {
+            box.stringValue = value
+        }
+        commit(saveEmptyRows: false)
+    }
+
+    private func readFields() {
+        for index in entries.indices {
+            if wordFields.indices.contains(index) {
+                entries[index].word = wordFields[index].stringValue
+            }
+            if flagFields.indices.contains(index) {
+                entries[index].flag = flagFields[index].stringValue
             }
         }
+    }
+
+    private func commit(saveEmptyRows: Bool) {
+        readFields()
+        persist(saveEmptyRows: saveEmptyRows)
+        onChange?()
+    }
+
+    private func persist(saveEmptyRows: Bool) {
+        var settings = FlagSettings.load()
+        settings.languages = entries.compactMap { entry in
+            var copy = entry
+            copy.word = copy.word.trimmingCharacters(in: .whitespacesAndNewlines)
+            copy.flag = normalizeFlag(copy.flag) ?? ""
+            copy.modeKey = copy.modeKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !saveEmptyRows, copy.word.isEmpty, copy.flag.isEmpty, copy.modeKey.isEmpty {
+                return nil
+            }
+            return copy
+        }
+        settings.flags = [:]
         try? settings.save()
     }
 
+    @objc private func addLanguage() {
+        readFields()
+        entries.append(LanguageChoice())
+        focusNewRow = true
+        reloadRows()
+    }
+
+    @objc private func removeRow(_ sender: NSButton) {
+        readFields()
+        guard entries.indices.contains(sender.tag) else { return }
+        entries.remove(at: sender.tag)
+        reloadRows()
+        persist(saveEmptyRows: false)
+        onChange?()
+    }
+
     @objc private func previewRow(_ sender: NSButton) {
-        guard rows.indices.contains(sender.tag) else { return }
-        saveRows()
-        let code = normalizeCountry(rows[sender.tag].box.stringValue) ?? "NL"
+        readFields()
+        guard entries.indices.contains(sender.tag) else { return }
+        guard let code = normalizeFlag(entries[sender.tag].flag) else { return }
+        persist(saveEmptyRows: false)
+        onChange?()
         onPreview?(code)
     }
 }
@@ -484,12 +725,6 @@ private final class LanguageChooser: NSObject, NSComboBoxDelegate {
 private final class SettingsApp: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private let preview = ScreenPreview(frame: .zero)
-    private let segments = NSSegmentedControl(
-        labels: ["Dutch", "English", "Spanish"],
-        trackingMode: .selectOne,
-        target: nil,
-        action: nil
-    )
     private let sizeSlider = NSSlider(value: 10, minValue: 2, maxValue: 80, target: nil, action: nil)
     private let opacitySlider = NSSlider(value: 50, minValue: 5, maxValue: 100, target: nil, action: nil)
     private let timeSlider = NSSlider(value: 0.3, minValue: 0.05, maxValue: 2, target: nil, action: nil)
@@ -555,81 +790,68 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Language Flash"
         window.isReleasedWhenClosed = false
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 600))
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 560))
         window.contentView = content
 
-        let subtitle = NSTextField(wrappingLabelWithString: "Size is the percent of the screen width. Opacity is how solid the flag is. Time is how long it stays up.")
+        let subtitle = NSTextField(wrappingLabelWithString: "Size is the percent of the screen width. Opacity is how solid the flag is. Time is how long it stays up. Languages… changes every language, including Dutch, English, and Spanish.")
         subtitle.textColor = .secondaryLabelColor
         subtitle.font = NSFont.systemFont(ofSize: 13)
         subtitle.preferredMaxLayoutWidth = 480
-        place(subtitle, NSRect(x: 20, y: 536, width: 480, height: 44), in: content)
+        place(subtitle, NSRect(x: 20, y: 496, width: 480, height: 52), in: content)
 
-        place(preview, NSRect(x: 20, y: 372, width: 480, height: 152), in: content)
-
-        segments.segmentStyle = .automatic
-        segments.selectedSegment = 1
-        place(segments, NSRect(x: 110, y: 344, width: 300, height: 24), in: content)
+        place(preview, NSRect(x: 20, y: 332, width: 480, height: 152), in: content)
 
         addSliderRow(
             title: "Size",
             slider: sizeSlider,
             value: sizeValue,
-            y: 302,
+            y: 292,
             in: content
         )
         addSliderRow(
             title: "Opacity",
             slider: opacitySlider,
             value: opacityValue,
-            y: 266,
+            y: 256,
             in: content
         )
         addSliderRow(
             title: "Time",
             slider: timeSlider,
             value: timeValue,
-            y: 230,
+            y: 220,
             in: content
         )
 
-        let buttons = NSStackView()
-        buttons.orientation = .horizontal
-        buttons.distribution = .fillEqually
-        buttons.spacing = 8
-        for (title, action) in [
-            ("Preview Dutch", #selector(previewDutch)),
-            ("Preview English", #selector(previewEnglish)),
-            ("Preview Spanish", #selector(previewSpanish)),
-            ("Languages…", #selector(showLanguages)),
-        ] as [(String, Selector)] {
-            let button = NSButton(title: title, target: self, action: action)
-            button.bezelStyle = .rounded
-            buttons.addArrangedSubview(button)
-        }
-        place(buttons, NSRect(x: 20, y: 180, width: 480, height: 32), in: content)
+        let previewButton = NSButton(title: "Preview", target: self, action: #selector(previewSample))
+        previewButton.bezelStyle = .rounded
+        place(previewButton, NSRect(x: 20, y: 172, width: 120, height: 32), in: content)
+        let languagesButton = NSButton(title: "Languages…", target: self, action: #selector(showLanguages))
+        languagesButton.bezelStyle = .rounded
+        place(languagesButton, NSRect(x: 148, y: 172, width: 130, height: 32), in: content)
 
         loginCheck.font = NSFont.systemFont(ofSize: 13)
-        place(loginCheck, NSRect(x: 18, y: 140, width: 280, height: 24), in: content)
+        place(loginCheck, NSRect(x: 18, y: 132, width: 280, height: 24), in: content)
         loginSettingsButton.bezelStyle = .rounded
         loginSettingsButton.target = self
         loginSettingsButton.action = #selector(openLoginItems)
-        place(loginSettingsButton, NSRect(x: 340, y: 136, width: 160, height: 32), in: content)
+        place(loginSettingsButton, NSRect(x: 340, y: 128, width: 160, height: 32), in: content)
 
-        dot.frame = NSRect(x: 20, y: 108, width: 10, height: 10)
+        dot.frame = NSRect(x: 20, y: 100, width: 10, height: 10)
         content.addSubview(dot)
         statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        place(statusLabel, NSRect(x: 38, y: 100, width: 330, height: 22), in: content)
+        place(statusLabel, NSRect(x: 38, y: 92, width: 330, height: 22), in: content)
         startButton.bezelStyle = .rounded
         startButton.target = self
         startButton.action = #selector(startOrRestart)
-        place(startButton, NSRect(x: 380, y: 94, width: 120, height: 32), in: content)
+        place(startButton, NSRect(x: 380, y: 86, width: 120, height: 32), in: content)
 
         note.font = NSFont.systemFont(ofSize: 13)
         note.textColor = .labelColor
@@ -670,8 +892,6 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     }
 
     private func wireActions() {
-        segments.target = self
-        segments.action = #selector(segmentChanged(_:))
         for slider in [sizeSlider, opacitySlider, timeSlider] {
             slider.target = self
             slider.action = #selector(sliderMoved(_:))
@@ -690,13 +910,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
 
     private func applyToPreview() {
         let settings = currentSettings()
-        if segments.selectedSegment == 0 {
-            preview.kind = .netherlands
-        } else if segments.selectedSegment == 2 {
-            preview.kind = .spain
-        } else {
-            preview.kind = .unitedStates
-        }
+        preview.sample = sampleFlag(from: settings)
         preview.widthPercent = CGFloat(settings.widthPercent)
         preview.opacity = CGFloat(settings.opacityPercent / 100)
         sizeValue.stringValue = "\(Int(settings.widthPercent))%"
@@ -803,46 +1017,27 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         return path
     }
 
-    private func flash(_ kind: PreviewKind) {
-        segments.selectedSegment = kind.rawValue
-        applyToPreview()
-        saveWork?.cancel()
-        save()
-        guard let executable = agentExecutable() else {
-            note.stringValue = "The background flash is not installed, so there is nothing to preview on screen."
-            note.textColor = .systemRed
-            return
-        }
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable)
-        task.arguments = ["--preview", kind.token]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        do {
-            try task.run()
-        } catch {
-            note.stringValue = "Could not preview: \(error.localizedDescription)"
-            note.textColor = .systemRed
-        }
-    }
-
     @objc private func sliderMoved(_: NSSlider) {
         applyToPreview()
         scheduleSave()
     }
 
-    @objc private func segmentChanged(_: NSSegmentedControl) {
-        applyToPreview()
+    @objc private func previewSample() {
+        let code = sampleFlag(from: FlagSettings.load())
+        guard !code.isEmpty else {
+            note.stringValue = "Add a language with a flag first."
+            note.textColor = .systemRed
+            return
+        }
+        previewCountry(code)
     }
 
-    @objc private func previewDutch() { flash(.netherlands) }
-    @objc private func previewEnglish() { flash(.unitedStates) }
-    @objc private func previewSpanish() { flash(.spain) }
-
     @objc private func showLanguages() {
-        LanguageChooser.shared.show(relativeTo: window) { [weak self] code in
+        LanguageEditor.shared.show(relativeTo: window, preview: { [weak self] code in
             self?.previewCountry(code)
-        }
+        }, changed: { [weak self] in
+            self?.applyToPreview()
+        })
     }
 
     private func previewCountry(_ code: String) {

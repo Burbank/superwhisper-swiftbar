@@ -87,16 +87,18 @@ When the Superwhisper dictation key is pressed, a flag for the **current** mode 
 
 The Mac keyboard and an external keyboard can use different dictation keys. The app watches every record shortcut saved in Superwhisper, including a shortcut stored on a mode, and also the moment a recording starts. Either key shows the language that is active for that press.
 
-The flag uses the same active mode as the menu bar:
+The flag uses the same active mode as the menu bar. Until you edit the list, Dutch, English, and Spanish are the starting flags:
 
 | Mode key / language | Flag |
 | --- | --- |
 | `default` / `en` | United States |
 | `super` / `nl` | Netherlands |
 | `es` | Spain |
-| anything else | the mode name, until you choose a flag |
+| anything else | the mode name |
 
-Dutch, English, and Spanish are the built-in flags. In Language Flash, **Languages…** lists every Superwhisper mode. Choose a country code, such as `FR`, `DE`, or `GB`. `NL`, `US`, and `ES` stay the drawn flags. Any other code shows that country’s flag. The choice is saved with the mode and used the next time you dictate.
+**Languages…** is the whole list. Every row can be renamed, given a different flag, removed, or replaced. **Add language** adds a row that was not there before. Dutch, English, and Spanish are not fixed. After you change the list, only that list is used. A mode that is no longer on the list shows its name.
+
+A country code such as `NL`, `US`, `ES`, `FR`, or `DE` picks the flag. `NL`, `US`, and `ES` are drawn. Any other code uses that country’s flag. A row that started from a Superwhisper mode keeps following that mode after you rename it. A row you add follows a mode with the same name. The next dictation uses the change. The background flash does not need a restart.
 
 Keep this git folder outside iCloud. A pull inside `Mobile Documents` can stop with `mmap failed: Operation canceled`, and then the installer never runs. On this Mac, use a local copy:
 
@@ -116,7 +118,7 @@ The installer puts **Language Flash** in the main Applications folder, `/Applica
 
 The window has a **Start when you log in** checkbox. Turning it on registers Language Flash with macOS, so the name appears under **System Settings → General → Login Items & Extensions**. **Login Items…** opens that list. A background job installed by hand only produces a short notification and does not show the app name there.
 
-Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview Dutch**, **Preview English**, and **Preview Spanish** flash the flag on screen with the current settings.
+Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview** flashes the first language in your list. Each row in **Languages…** has its own Preview.
 
 Seeing the saved shortcut as a key needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and allow **Language Flash**. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
 
