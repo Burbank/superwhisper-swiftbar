@@ -23,7 +23,7 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 | `bin/sound-server.swift` | Preloads `now_US.wav` / `now_NL.wav`, plays on FIFO command |
 | [`bin/flag-flash.swift`](bin/flag-flash.swift) | [Language flag flash](#language-flag-flash) on the dictation key |
 | [`bin/flag-settings.swift`](bin/flag-settings.swift) | **Language Flash** settings window in Applications |
-| LaunchAgent | Keeps **Superwhisper Mode Sounds** and **Superwhisper Language Flash** running in the background |
+| LaunchAgent | Keeps **Superwhisper Mode Sounds** and **Language Flash** running in the background |
 
 Cue mapping (mode key → sound):
 
@@ -116,7 +116,7 @@ The window has a **Start when you log in** checkbox. Turning it on registers Lan
 
 Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview Dutch**, **Preview English**, and **Preview Spanish** flash the flag on screen with the current settings.
 
-The background-item prompt is the one that keeps the flash running. Seeing the saved shortcut as a key also needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and add **Superwhisper Language Flash** from `~/Library/Application Support/superwhisper-swiftbar/bin/`. That is the background item, separate from the Language Flash window. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
+Seeing the saved shortcut as a key needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and allow **Language Flash**. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
 
 The same settings can still be changed from the terminal. Both write `~/Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json`.
 
@@ -189,14 +189,13 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
   bin/
     sound-server.swift
     Superwhisper Mode Sounds.app/
-    Superwhisper Language Flash.app/          # background flash
 
-/Applications/Language Flash.app              # settings window, flag icon
+/Applications/Language Flash.app              # settings window and background flash
 
 ~/.local/bin/
   cycle-superwhisper-mode -> …/cycle-superwhisper-mode.sh
   switch-superwhisper-mode -> …/switch-superwhisper-mode.sh
-  flag-flash -> …/Superwhisper Language Flash.app/Contents/MacOS/…
+  flag-flash -> /Applications/Language Flash.app/Contents/MacOS/Language Flash Agent
 ```
 
 

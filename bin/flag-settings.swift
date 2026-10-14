@@ -104,10 +104,15 @@ private func xmlText(_ value: String) -> String {
         .replacingOccurrences(of: ">", with: "&gt;")
 }
 
-private func agentIsRunning() -> Bool {
-    let uid = getuid()
-    let result = runCommand("/bin/launchctl", ["print", "gui/\(uid)/\(launchAgentLabel)"])
-    return result.0 == 0 && result.1.contains("state = running")
+private struct AgentProcessStatus {
+    var loaded = false
+    var running = false
+}
+
+private func agentProcessStatus() -> AgentProcessStatus {
+    let result = runCommand("/bin/launchctl", ["print", "gui/\(getuid())/\(launchAgentLabel)"])
+    let loaded = result.0 == 0
+    return AgentProcessStatus(loaded: loaded, running: loaded && result.1.contains("state = running"))
 }
 
 private enum PreviewKind: Int {
@@ -554,9 +559,10 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     }
 
     private func refreshStatus() {
-        refreshLoginCheck()
+        let process = agentProcessStatus()
+        refreshLoginCheck(agentLoaded: process.loaded)
         let installed = embeddedAgentPlistExists() || FileManager.default.fileExists(atPath: launchAgentPlist().path)
-        running = agentIsRunning()
+        running = process.running
         dot.running = running
         if !installed {
             statusLabel.stringValue = "Not installed"
@@ -633,7 +639,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             return
         }
         let service = SMAppService.agent(plistName: agentPlistName)
-        if service.status == .enabled || service.status == .requiresApproval || legacyAgentIsLoaded() {
+        if service.status == .enabled || service.status == .requiresApproval || agentProcessStatus().loaded {
             return
         }
         do {
@@ -641,12 +647,6 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         } catch {
             installLegacyAgent()
         }
-    }
-
-    private func legacyAgentIsLoaded() -> Bool {
-        let uid = getuid()
-        let result = runCommand("/bin/launchctl", ["print", "gui/\(uid)/\(launchAgentLabel)"])
-        return result.0 == 0
     }
 
     private func installLegacyAgent() {
@@ -703,7 +703,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         let bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist.path])
         _ = runCommand("/bin/launchctl", ["enable", service])
         _ = runCommand("/bin/launchctl", ["kickstart", "-k", service])
-        if bootstrap.0 != 0 && !legacyAgentIsLoaded() {
+        if bootstrap.0 != 0 && !agentProcessStatus().loaded {
             let detail = bootstrap.1.trimmingCharacters(in: .whitespacesAndNewlines)
             failure = detail.isEmpty
                 ? "Could not add Language Flash to login items."
@@ -724,7 +724,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         try? FileManager.default.removeItem(at: plist)
     }
 
-    private func refreshLoginCheck() {
+    private func refreshLoginCheck(agentLoaded: Bool) {
         guard #available(macOS 13.0, *) else {
             loginCheck.isEnabled = false
             loginHint = "This macOS is too old to show Language Flash in Login Items."
@@ -746,7 +746,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             loginCheck.state = .on
             loginHint = "Allow Language Flash in System Settings → General → Login Items & Extensions. Login Items… opens that list."
         case .notRegistered, .notFound:
-            loginCheck.state = legacyAgentIsLoaded() ? .on : .off
+            loginCheck.state = agentLoaded ? .on : .off
             loginHint = nil
         @unknown default:
             loginCheck.state = .off
@@ -768,7 +768,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             } catch {
                 installLegacyAgent()
             }
-            if service.status != .enabled && service.status != .requiresApproval && !legacyAgentIsLoaded() {
+            if service.status != .enabled && service.status != .requiresApproval && !agentProcessStatus().loaded {
                 installLegacyAgent()
             }
         } else {

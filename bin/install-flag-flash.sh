@@ -9,8 +9,7 @@ SWIFT="$ROOT/bin/flag-flash.swift"
 SETTINGS_SWIFT="$ROOT/bin/flag-settings.swift"
 ICON="$ROOT/assets/language-flash-icon.png"
 SUPPORT="${SWIFTBAR_SUPPORT_DIR:-$HOME/Library/Application Support/superwhisper-swiftbar}"
-APP="$SUPPORT/bin/Superwhisper Language Flash.app"
-BIN="$APP/Contents/MacOS/Superwhisper Language Flash"
+OLD_APP="$SUPPORT/bin/Superwhisper Language Flash.app"
 LOG="$SUPPORT/flag-flash.log"
 LABEL="com.burbank.superwhisper-flag-flash"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
@@ -112,25 +111,23 @@ SERVICE="${DOMAIN}/${LABEL}"
 launchctl bootout "$SERVICE" 2>/dev/null || true
 osascript -e 'quit app "Language Flash"' >/dev/null 2>&1 || true
 
-case "$APP" in
+case "$OLD_APP" in
   */"Superwhisper Language Flash.app") ;;
-  *) echo "Refusing to replace $APP"; exit 1 ;;
+  *) echo "Refusing to replace $OLD_APP"; exit 1 ;;
 esac
 case "$SETTINGS_APP" in
   */"Language Flash.app") ;;
   *) echo "Refusing to replace $SETTINGS_APP"; exit 1 ;;
 esac
-rm -rf "$APP" "$SETTINGS_APP"
-mkdir -p "$APP/Contents/MacOS" "$SETTINGS_APP/Contents/MacOS" "$SETTINGS_APP/Contents/Library/LaunchAgents"
-cp "$BUILD/agent" "$BIN"
+# One app. The old Application Support bundle was a second copy of the same agent.
+rm -rf "$OLD_APP" "$SETTINGS_APP"
+mkdir -p "$SETTINGS_APP/Contents/MacOS" "$SETTINGS_APP/Contents/Library/LaunchAgents"
 cp "$BUILD/agent" "$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
 mv "$BUILD/settings" "$SETTINGS_BIN"
 rm -rf "$BUILD"
-chmod +x "$BIN" "$SETTINGS_BIN" "$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
+chmod +x "$SETTINGS_BIN" "$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
 
-write_info_plist "$APP" "Superwhisper Language Flash" "com.burbank.superwhisper-flag-flash" "Superwhisper Language Flash" "true"
 write_info_plist "$SETTINGS_APP" "Language Flash" "com.burbank.language-flash" "Language Flash" "false"
-render_icon "$APP"
 render_icon "$SETTINGS_APP"
 sed -e "s|__LOG_PATH__|${LOG}|g" \
     "$ROOT/LaunchAgents/com.burbank.language-flash-embedded.plist.template" \
@@ -143,11 +140,9 @@ fi
 
 ln -sfn "$SETTINGS_APP/Contents/MacOS/Language Flash Agent" "$HOME/.local/bin/flag-flash"
 
-# The old plist was installed by hand, so macOS never listed it under Language Flash.
-# Remove it before the app registers the same job through Login Items.
+# The old hand-installed plist is not tied to Language Flash. Remove it so the
+# app can register one login item under its own name.
 rm -f "$PLIST"
-launchctl enable "$SERVICE" 2>/dev/null || true
-launchctl bootout "$SERVICE" 2>/dev/null || true
 
 codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
 
