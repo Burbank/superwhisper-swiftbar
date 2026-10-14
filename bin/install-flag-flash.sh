@@ -84,7 +84,9 @@ write_info_plist() {
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.1</string>
+  <string>1.2</string>
+  <key>CFBundleVersion</key>
+  <string>1.2</string>
   <key>LSUIElement</key>
   <${ui_element}/>
   <key>NSHighResolutionCapable</key>
@@ -95,6 +97,70 @@ write_info_plist() {
 </plist>
 PLIST
   printf 'APPL????' > "$dest_app/Contents/PkgInfo"
+}
+
+# Same Developer ID and notary login as yourMark. Ad-hoc signing remains when that certificate is absent.
+sign_and_notarize() {
+  local app="$1"
+  local agent="$app/Contents/MacOS/Language Flash Agent"
+  local identity="${CODESIGN_IDENTITY:-}"
+  xattr -cr "$app" >/dev/null 2>&1 || true
+  if [ -z "$identity" ]; then
+    identity="$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $2; exit}' || true)"
+  fi
+  if [ -z "$identity" ]; then
+    echo "No Developer ID certificate on this Mac. Language Flash is signed locally, so Gatekeeper may ask before it opens."
+    codesign --force --deep --sign - "$app" || echo "Could not sign Language Flash. Login Items may hide it."
+    return 0
+  fi
+  echo "Signing with $identity"
+  if ! codesign --force --options runtime --timestamp --sign "$identity" "$agent" \
+    || ! codesign --force --options runtime --timestamp --sign "$identity" "$app"; then
+    echo "Developer ID signing failed. Signing locally instead."
+    codesign --force --deep --sign - "$app" || echo "Could not sign Language Flash. Login Items may hide it."
+    return 0
+  fi
+  local profile="${NOTARY_PROFILE:-yourmark-notary}"
+  local work zip notary
+  work="$(mktemp -d)"
+  zip="$work/Language-Flash.zip"
+  ditto -c -k --keepParent "$app" "$zip"
+  notary="missing"
+  if xcrun notarytool history --keychain-profile "$profile" >/dev/null 2>&1; then
+    echo "Sending Language Flash to Apple for notarization. This can take a few minutes."
+    notary="failed"
+    if xcrun notarytool submit "$zip" --keychain-profile "$profile" --wait; then
+      notary="ok"
+    fi
+  elif [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
+    echo "Sending Language Flash to Apple for notarization. This can take a few minutes."
+    notary="failed"
+    if xcrun notarytool submit "$zip" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait; then
+      notary="ok"
+    fi
+  elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+    echo "Sending Language Flash to Apple for notarization. This can take a few minutes."
+    notary="failed"
+    if xcrun notarytool submit "$zip" \
+      --apple-id "$APPLE_ID" \
+      --team-id "${APPLE_TEAM_ID:-R4SB7G9A32}" \
+      --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+      --wait; then
+      notary="ok"
+    fi
+  else
+    echo "Signed with Developer ID. Notarization needs the same notary login as yourMark (keychain profile $profile)."
+  fi
+  if [ "$notary" = "ok" ]; then
+    if xcrun stapler staple "$app"; then
+      echo "Notarized. Other Macs can open Language Flash without the unidentified-developer warning."
+    else
+      echo "Apple accepted the app, but the ticket was not stapled. It can still open when this Mac is online."
+    fi
+  elif [ "$notary" = "failed" ]; then
+    echo "Apple did not notarize this copy. Language Flash is still installed."
+  fi
+  rm -rf "$work"
 }
 
 mkdir -p "$SUPPORT/bin" "$HOME/.local/bin" "$(dirname "$PLIST")"
@@ -140,7 +206,7 @@ fi
 
 ln -sfn "$SETTINGS_APP/Contents/MacOS/Language Flash Agent" "$HOME/.local/bin/flag-flash"
 
-codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
+sign_and_notarize "$SETTINGS_APP"
 
 AGENT="$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
 cat > "$PLIST" << PLIST

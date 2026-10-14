@@ -87,6 +87,26 @@ When the Superwhisper dictation key is pressed, a flag for the **current** mode 
 
 The Mac keyboard and an external keyboard can use different dictation keys. The app watches every record shortcut saved in Superwhisper, including a shortcut stored on a mode, and also the moment a recording starts. Either key shows the language that is active for that press.
 
+### How to use Language Flash
+
+Press the dictation key. A small flag for the language that is active flashes on the screen, then disappears. Superwhisper still receives the key.
+
+![A small Dutch flag flashes in the middle of the screen when dictation starts](docs/language-flash/flash.png)
+
+Open **Language Flash** from the Applications folder. The sliders set how wide the flag is, how solid it is, and how long it stays. **Preview** shows that on screen. The green **Running** line means the next dictation will flash.
+
+![Language Flash settings: size, opacity, time, Preview, Languages, and a Running status](docs/language-flash/settings.png)
+
+**Languages…** is the whole list. The name and the flag on every row can be changed, including Dutch, English, and Spanish. **Remove** deletes a row. **Add language** adds one. **Preview** on a row flashes that flag.
+
+![Languages window with Dutch, English, and Spanish as editable rows](docs/language-flash/languages.png)
+
+After you edit the list, only that list is used. A row that started from a Superwhisper mode keeps following that mode when you rename it. A new row follows a mode with the same name. The next dictation uses the change. The background flash does not need a restart.
+
+![The same list after Dutch, English, and Spanish were replaced with German, French, and Portuguese](docs/language-flash/changed.png)
+
+`NL`, `US`, and `ES` are drawn flags. Any other country code, such as `FR`, `DE`, or `PT`, uses that country’s flag.
+
 The flag uses the same active mode as the menu bar. Until you edit the list, Dutch, English, and Spanish are the starting flags:
 
 | Mode key / language | Flag |
@@ -95,10 +115,6 @@ The flag uses the same active mode as the menu bar. Until you edit the list, Dut
 | `super` / `nl` | Netherlands |
 | `es` | Spain |
 | anything else | the mode name |
-
-**Languages…** is the whole list. Every row can be renamed, given a different flag, removed, or replaced. **Add language** adds a row that was not there before. Dutch, English, and Spanish are not fixed. After you change the list, only that list is used. A mode that is no longer on the list shows its name.
-
-A country code such as `NL`, `US`, `ES`, `FR`, or `DE` picks the flag. `NL`, `US`, and `ES` are drawn. Any other code uses that country’s flag. A row that started from a Superwhisper mode keeps following that mode after you rename it. A row you add follows a mode with the same name. The next dictation uses the change. The background flash does not need a restart.
 
 Keep this git folder outside iCloud. A pull inside `Mobile Documents` can stop with `mmap failed: Operation canceled`, and then the installer never runs. On this Mac, use a local copy:
 
@@ -115,6 +131,8 @@ From a copy that is already on disk:
 ```
 
 The installer puts **Language Flash** in the main Applications folder, `/Applications`, next to your other apps. It does not go in Utilities. If that folder is not writable, it uses `~/Applications` instead, and the script prints the path. The icon is a Dutch flag with a small American flag on the corner.
+
+On a Mac that already has the Developer ID certificate used for yourMark, the installer signs Language Flash and sends it to Apple for notarization, using the same notary login (`yourmark-notary`). That takes a few minutes. Afterwards the app opens without the “developer cannot be verified” warning, including on another Mac. If that certificate is not on the machine, the app still installs and is signed locally, and Gatekeeper may ask the first time it opens.
 
 The window has a **Start when you log in** checkbox. Turning it on registers Language Flash with macOS, so the name appears under **System Settings → General → Login Items & Extensions**. **Login Items…** opens that list. A background job installed by hand only produces a short notification and does not show the app name there.
 

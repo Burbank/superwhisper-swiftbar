@@ -2,6 +2,8 @@
 
 ## 2026-10-14
 
+- How to use Language Flash, with pictures of the flash, the settings window, and the language list
+- The installer notarizes Language Flash when this Mac has the same Developer ID certificate and notary login as yourMark. Without that certificate it still installs and signs the app locally
 - **Languages…** is a list you own. Rename, replace, or remove Dutch, English, and Spanish, and add any other language. After you edit the list, those three are no longer built in
 - **Language Flash** settings window in Applications, with a Dutch-and-American flag icon. Sliders set size, opacity, and time on screen, and the window shows whether the background flash is running
 - Preview flashes the first language in the list. Each language row has its own Preview
