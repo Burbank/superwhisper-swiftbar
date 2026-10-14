@@ -140,9 +140,47 @@ fi
 
 ln -sfn "$SETTINGS_APP/Contents/MacOS/Language Flash Agent" "$HOME/.local/bin/flag-flash"
 
-# The old hand-installed plist is not tied to Language Flash. Remove it so the
-# app can register one login item under its own name.
-rm -f "$PLIST"
+codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
+
+AGENT="$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
+cat > "$PLIST" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL}</string>
+  <key>AssociatedBundleIdentifiers</key>
+  <array>
+    <string>com.burbank.language-flash</string>
+  </array>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${AGENT}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>${LOG}</string>
+  <key>StandardOutPath</key>
+  <string>${LOG}</string>
+  <key>BurbankManagedAgent</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+
+# A disabled service makes bootstrap fail with "Bootstrap failed: 5".
+launchctl enable "$SERVICE" 2>/dev/null || true
+launchctl bootout "$SERVICE" 2>/dev/null || true
+if ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
+  launchctl enable "$SERVICE" 2>/dev/null || true
+  launchctl bootout "$SERVICE" 2>/dev/null || true
+  launchctl bootstrap "$DOMAIN" "$PLIST"
+fi
+launchctl kickstart -k "$SERVICE"
 
 codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
 

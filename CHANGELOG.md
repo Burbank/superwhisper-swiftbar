@@ -9,6 +9,7 @@
 - Language Flash is installed in the main Applications folder, not Utilities. Install the git folder from outside iCloud; a pull inside iCloud can fail with `mmap failed: Operation canceled`
 - **Start when you log in** registers Language Flash in System Settings → General → Login Items & Extensions. The old hand-installed background job did not show the app name there
 - The installer keeps a single Language Flash app. It no longer builds a second copy in Application Support, and the settings window asks launchd once per refresh
+- Start registers the login job before restarting it, so launchd no longer reports that `com.burbank.superwhisper-flag-flash` is missing
 
 ## 2026-10-12
 

@@ -630,21 +630,14 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     @objc private func previewSpanish() { flash(.spain) }
 
     private func ensureLoginItem() {
-        guard #available(macOS 13.0, *) else {
-            installLegacyAgent()
-            return
+        if #available(macOS 13.0, *), embeddedAgentPlistExists() {
+            let service = SMAppService.agent(plistName: agentPlistName)
+            if service.status == .notRegistered {
+                try? service.register()
+            }
         }
-        guard embeddedAgentPlistExists() else {
-            installLegacyAgent()
-            return
-        }
-        let service = SMAppService.agent(plistName: agentPlistName)
-        if service.status == .enabled || service.status == .requiresApproval || agentProcessStatus().loaded {
-            return
-        }
-        do {
-            try service.register()
-        } catch {
+        // SMAppService can report success without loading the job. launchctl is what Start uses.
+        if !agentProcessStatus().loaded {
             installLegacyAgent()
         }
     }
@@ -696,15 +689,21 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             failure = "Could not save the login item. \(error.localizedDescription)"
             return
         }
-        let uid = getuid()
-        let domain = "gui/\(uid)"
+        let domain = "gui/\(getuid())"
         let service = "\(domain)/\(launchAgentLabel)"
-        _ = runCommand("/bin/launchctl", ["bootout", service])
-        let bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist.path])
         _ = runCommand("/bin/launchctl", ["enable", service])
-        _ = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        _ = runCommand("/bin/launchctl", ["bootout", service])
+        var bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist.path])
         if bootstrap.0 != 0 && !agentProcessStatus().loaded {
-            let detail = bootstrap.1.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = runCommand("/bin/launchctl", ["enable", service])
+            _ = runCommand("/bin/launchctl", ["bootout", service])
+            bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist.path])
+        }
+        _ = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        if !agentProcessStatus().loaded {
+            let detail = bootstrap.1
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\n", with: " ")
             failure = detail.isEmpty
                 ? "Could not add Language Flash to login items."
                 : "Could not add Language Flash to login items. \(detail)"
@@ -761,14 +760,10 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         let service = SMAppService.agent(plistName: agentPlistName)
         failure = nil
         if sender.state == .on {
-            do {
-                if service.status == .notRegistered || service.status == .notFound {
-                    try service.register()
-                }
-            } catch {
-                installLegacyAgent()
+            if service.status == .notRegistered || service.status == .notFound {
+                try? service.register()
             }
-            if service.status != .enabled && service.status != .requiresApproval && !agentProcessStatus().loaded {
+            if !agentProcessStatus().loaded {
                 installLegacyAgent()
             }
         } else {
@@ -791,18 +786,23 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         startButton.isEnabled = false
         failure = nil
         ensureLoginItem()
+        if !agentProcessStatus().loaded {
+            installLegacyAgent()
+        }
         _ = runCommand("/bin/launchctl", ["enable", service])
-        let kick = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        var kick = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        if kick.1.contains("Could not find service") {
+            installLegacyAgent()
+            kick = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        }
         refreshStatus()
         if !running {
-            let detail = kick.1
+            let detail = (failure ?? kick.1)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\n", with: " ")
-            if detail.isEmpty {
-                failure = "Could not start the flash. Turn on “Start when you log in”, then click Start again."
-            } else {
-                failure = "Could not start the flash. \(detail)"
-            }
+            failure = detail.isEmpty
+                ? "Could not start the flash. Turn on “Start when you log in”, then click Start again."
+                : "Could not start the flash. \(detail)"
             refreshNote()
         }
         startButton.isEnabled = true
