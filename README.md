@@ -40,7 +40,7 @@ Cue mapping (mode key → sound):
 - [SwiftBar](https://swiftbar.app)
 - Xcode Command Line Tools / `swiftc` (to build the sound agent and the flag flash)
 - `python3` (ships with macOS)
-- Accessibility permission for **Superwhisper Language Flash** (flag flash only)
+- Accessibility permission for **Language Flash** (flag flash only)
 
 ## Installation
 
@@ -219,7 +219,7 @@ Hotkeys and SwiftBar actions should call space-free symlinks in `~/.local/bin/` 
 These LaunchAgents keep things working after restart:
 
 1. **Superwhisper Mode Sounds** — preloads cue audio
-2. **Superwhisper Language Flash** — flashes the active language when the dictation key is pressed. Source: [bin/flag-flash.swift](bin/flag-flash.swift)
+2. **Language Flash** — flashes the active language when the dictation key is pressed. Source: [bin/flag-flash.swift](bin/flag-flash.swift)
 3. **ensure-superwhisper-f3** (optional, disabled by default) — can recreate the F3 shortcut at login; left off because an earlier hourly version spawned duplicates
 
 They live under `~/Library/LaunchAgents/` and the ensure script under  
