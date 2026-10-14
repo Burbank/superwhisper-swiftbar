@@ -7,8 +7,10 @@
 
 import AppKit
 import Darwin
+import ServiceManagement
 
 private let launchAgentLabel = "com.burbank.superwhisper-flag-flash"
+private let agentPlistName = "com.burbank.superwhisper-flag-flash.plist"
 
 private struct FlagSettings: Codable {
     var widthPercent: Double = 10
@@ -57,11 +59,20 @@ private func settingsFileURL() -> URL {
 
 private func agentExecutable() -> String? {
     let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let bundled = Bundle.main.bundleURL
+        .appendingPathComponent("Contents/MacOS/Language Flash Agent").path
     let candidates = [
-        "\(home)/Library/Application Support/superwhisper-swiftbar/bin/Superwhisper Language Flash.app/Contents/MacOS/Superwhisper Language Flash",
+        bundled,
         "\(home)/.local/bin/flag-flash",
+        "\(home)/Library/Application Support/superwhisper-swiftbar/bin/Superwhisper Language Flash.app/Contents/MacOS/Superwhisper Language Flash",
     ]
     return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+}
+
+private func embeddedAgentPlistExists() -> Bool {
+    let url = Bundle.main.bundleURL
+        .appendingPathComponent("Contents/Library/LaunchAgents/\(agentPlistName)")
+    return FileManager.default.fileExists(atPath: url.path)
 }
 
 private func launchAgentPlist() -> URL {
@@ -267,10 +278,14 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     private let dot = DotView(frame: .zero)
     private let statusLabel = NSTextField(labelWithString: "Checking…")
     private let startButton = NSButton(title: "Start", target: nil, action: nil)
+    private let loginCheck = NSButton(checkboxWithTitle: "Start when you log in", target: nil, action: nil)
+    private let loginSettingsButton = NSButton(title: "Login Items…", target: nil, action: nil)
     private let note = NSTextField(wrappingLabelWithString: "")
     private var timer: Timer?
     private var didSave = false
     private var running = false
+    private var updatingLoginCheck = false
+    private var loginHint: String?
     private var failure: String?
     private var saveError: String?
     private var saveWork: DispatchWorkItem?
@@ -280,6 +295,7 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
         buildWindow()
         loadControls()
         wireActions()
+        ensureLoginItem()
         refreshStatus()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             self?.refreshStatus()
@@ -318,47 +334,47 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
 
     private func buildWindow() {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 548),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Language Flash"
         window.isReleasedWhenClosed = false
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 548))
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 600))
         window.contentView = content
 
         let subtitle = NSTextField(wrappingLabelWithString: "Size is the percent of the screen width. Opacity is how solid the flag is. Time is how long it stays up.")
         subtitle.textColor = .secondaryLabelColor
         subtitle.font = NSFont.systemFont(ofSize: 13)
         subtitle.preferredMaxLayoutWidth = 480
-        place(subtitle, NSRect(x: 20, y: 484, width: 480, height: 44), in: content)
+        place(subtitle, NSRect(x: 20, y: 536, width: 480, height: 44), in: content)
 
-        place(preview, NSRect(x: 20, y: 320, width: 480, height: 152), in: content)
+        place(preview, NSRect(x: 20, y: 372, width: 480, height: 152), in: content)
 
         segments.segmentStyle = .automatic
         segments.selectedSegment = 1
-        place(segments, NSRect(x: 110, y: 292, width: 300, height: 24), in: content)
+        place(segments, NSRect(x: 110, y: 344, width: 300, height: 24), in: content)
 
         addSliderRow(
             title: "Size",
             slider: sizeSlider,
             value: sizeValue,
-            y: 250,
+            y: 302,
             in: content
         )
         addSliderRow(
             title: "Opacity",
             slider: opacitySlider,
             value: opacityValue,
-            y: 214,
+            y: 266,
             in: content
         )
         addSliderRow(
             title: "Time",
             slider: timeSlider,
             value: timeValue,
-            y: 178,
+            y: 230,
             in: content
         )
 
@@ -375,16 +391,23 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             button.bezelStyle = .rounded
             buttons.addArrangedSubview(button)
         }
-        place(buttons, NSRect(x: 20, y: 128, width: 480, height: 32), in: content)
+        place(buttons, NSRect(x: 20, y: 180, width: 480, height: 32), in: content)
 
-        dot.frame = NSRect(x: 20, y: 96, width: 10, height: 10)
+        loginCheck.font = NSFont.systemFont(ofSize: 13)
+        place(loginCheck, NSRect(x: 18, y: 140, width: 280, height: 24), in: content)
+        loginSettingsButton.bezelStyle = .rounded
+        loginSettingsButton.target = self
+        loginSettingsButton.action = #selector(openLoginItems)
+        place(loginSettingsButton, NSRect(x: 340, y: 136, width: 160, height: 32), in: content)
+
+        dot.frame = NSRect(x: 20, y: 108, width: 10, height: 10)
         content.addSubview(dot)
         statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        place(statusLabel, NSRect(x: 38, y: 88, width: 330, height: 22), in: content)
+        place(statusLabel, NSRect(x: 38, y: 100, width: 330, height: 22), in: content)
         startButton.bezelStyle = .rounded
         startButton.target = self
         startButton.action = #selector(startOrRestart)
-        place(startButton, NSRect(x: 380, y: 82, width: 120, height: 32), in: content)
+        place(startButton, NSRect(x: 380, y: 94, width: 120, height: 32), in: content)
 
         note.font = NSFont.systemFont(ofSize: 13)
         note.textColor = .labelColor
@@ -431,6 +454,8 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             slider.target = self
             slider.action = #selector(sliderMoved(_:))
         }
+        loginCheck.target = self
+        loginCheck.action = #selector(loginChanged(_:))
     }
 
     private func currentSettings() -> FlagSettings {
@@ -499,8 +524,13 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
             note.textColor = .systemRed
             return
         }
+        if let loginHint {
+            note.stringValue = loginHint
+            note.textColor = .labelColor
+            return
+        }
         note.textColor = .labelColor
-        let installed = FileManager.default.fileExists(atPath: launchAgentPlist().path)
+        let installed = embeddedAgentPlistExists() || FileManager.default.fileExists(atPath: launchAgentPlist().path)
         if !installed {
             note.stringValue = "The background flash is not installed yet. Run bin/install-flag-flash.sh from the project folder, then come back."
             return
@@ -517,8 +547,9 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     }
 
     private func refreshStatus() {
-        let installed = FileManager.default.fileExists(atPath: launchAgentPlist().path)
-        running = installed && agentIsRunning()
+        refreshLoginCheck()
+        let installed = embeddedAgentPlistExists() || FileManager.default.fileExists(atPath: launchAgentPlist().path)
+        running = agentIsRunning()
         dot.running = running
         if !installed {
             statusLabel.stringValue = "Not installed"
@@ -585,28 +616,183 @@ private final class SettingsApp: NSObject, NSApplicationDelegate {
     @objc private func previewEnglish() { flash(.unitedStates) }
     @objc private func previewSpanish() { flash(.spain) }
 
-    @objc private func startOrRestart() {
+    private func ensureLoginItem() {
+        guard #available(macOS 13.0, *) else {
+            installLegacyAgent()
+            return
+        }
+        guard embeddedAgentPlistExists() else {
+            installLegacyAgent()
+            return
+        }
+        let service = SMAppService.agent(plistName: agentPlistName)
+        if service.status == .enabled || service.status == .requiresApproval || legacyAgentIsLoaded() {
+            return
+        }
+        do {
+            try service.register()
+        } catch {
+            installLegacyAgent()
+        }
+    }
+
+    private func legacyAgentIsLoaded() -> Bool {
+        let uid = getuid()
+        let result = runCommand("/bin/launchctl", ["print", "gui/\(uid)/\(launchAgentLabel)"])
+        return result.0 == 0
+    }
+
+    private func installLegacyAgent() {
+        guard let executable = agentExecutable() else {
+            failure = "Could not find the background flash inside Language Flash."
+            return
+        }
+        let plist = launchAgentPlist()
+        let log = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/superwhisper-swiftbar/flag-flash.log")
+            .path
+        let body = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>Label</key>
+          <string>\(launchAgentLabel)</string>
+          <key>AssociatedBundleIdentifiers</key>
+          <array>
+            <string>com.burbank.language-flash</string>
+          </array>
+          <key>ProgramArguments</key>
+          <array>
+            <string>\(executable)</string>
+          </array>
+          <key>RunAtLoad</key>
+          <true/>
+          <key>KeepAlive</key>
+          <true/>
+          <key>StandardErrorPath</key>
+          <string>\(log)</string>
+          <key>StandardOutPath</key>
+          <string>\(log)</string>
+          <key>BurbankManagedAgent</key>
+          <true/>
+        </dict>
+        </plist>
+        """
+        do {
+            try FileManager.default.createDirectory(
+                at: plist.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data(body.utf8).write(to: plist, options: .atomic)
+        } catch {
+            failure = "Could not save the login item. \(error.localizedDescription)"
+            return
+        }
         let uid = getuid()
         let domain = "gui/\(uid)"
         let service = "\(domain)/\(launchAgentLabel)"
-        let plist = launchAgentPlist().path
-        guard FileManager.default.fileExists(atPath: plist) else {
-            refreshStatus()
+        _ = runCommand("/bin/launchctl", ["bootout", service])
+        let bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist.path])
+        _ = runCommand("/bin/launchctl", ["enable", service])
+        _ = runCommand("/bin/launchctl", ["kickstart", "-k", service])
+        if bootstrap.0 != 0 && !legacyAgentIsLoaded() {
+            let detail = bootstrap.1.trimmingCharacters(in: .whitespacesAndNewlines)
+            failure = detail.isEmpty
+                ? "Could not add Language Flash to login items."
+                : "Could not add Language Flash to login items. \(detail)"
+        }
+    }
+
+    private func removeLegacyAgent() {
+        let plist = launchAgentPlist()
+        let uid = getuid()
+        let service = "gui/\(uid)/\(launchAgentLabel)"
+        _ = runCommand("/bin/launchctl", ["bootout", service])
+        _ = runCommand("/bin/launchctl", ["disable", service])
+        guard let text = try? String(contentsOf: plist, encoding: .utf8),
+              text.contains("BurbankManagedAgent") else {
             return
         }
+        try? FileManager.default.removeItem(at: plist)
+    }
+
+    private func refreshLoginCheck() {
+        guard #available(macOS 13.0, *) else {
+            loginCheck.isEnabled = false
+            loginHint = "This macOS is too old to show Language Flash in Login Items."
+            return
+        }
+        guard embeddedAgentPlistExists() else {
+            loginCheck.isEnabled = false
+            loginHint = nil
+            return
+        }
+        loginCheck.isEnabled = true
+        let service = SMAppService.agent(plistName: agentPlistName)
+        updatingLoginCheck = true
+        switch service.status {
+        case .enabled:
+            loginCheck.state = .on
+            loginHint = nil
+        case .requiresApproval:
+            loginCheck.state = .on
+            loginHint = "Allow Language Flash in System Settings → General → Login Items & Extensions. Login Items… opens that list."
+        case .notRegistered, .notFound:
+            loginCheck.state = legacyAgentIsLoaded() ? .on : .off
+            loginHint = nil
+        @unknown default:
+            loginCheck.state = .off
+            loginHint = nil
+        }
+        updatingLoginCheck = false
+    }
+
+    @objc private func loginChanged(_ sender: NSButton) {
+        guard !updatingLoginCheck else { return }
+        guard #available(macOS 13.0, *) else { return }
+        let service = SMAppService.agent(plistName: agentPlistName)
+        failure = nil
+        if sender.state == .on {
+            do {
+                if service.status == .notRegistered || service.status == .notFound {
+                    try service.register()
+                }
+            } catch {
+                installLegacyAgent()
+            }
+            if service.status != .enabled && service.status != .requiresApproval && !legacyAgentIsLoaded() {
+                installLegacyAgent()
+            }
+        } else {
+            if service.status == .enabled || service.status == .requiresApproval {
+                try? service.unregister()
+            }
+            removeLegacyAgent()
+        }
+        refreshStatus()
+    }
+
+    @objc private func openLoginItems() {
+        guard #available(macOS 13.0, *) else { return }
+        SMAppService.openSystemSettingsLoginItems()
+    }
+
+    @objc private func startOrRestart() {
+        let uid = getuid()
+        let service = "gui/\(uid)/\(launchAgentLabel)"
         startButton.isEnabled = false
         failure = nil
+        ensureLoginItem()
         _ = runCommand("/bin/launchctl", ["enable", service])
-        _ = runCommand("/bin/launchctl", ["bootout", service])
-        let bootstrap = runCommand("/bin/launchctl", ["bootstrap", domain, plist])
         let kick = runCommand("/bin/launchctl", ["kickstart", "-k", service])
         refreshStatus()
         if !running {
-            let detail = (bootstrap.1 + " " + kick.1)
+            let detail = kick.1
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\n", with: " ")
             if detail.isEmpty {
-                failure = "Could not start the flash. Run the installer again from the project folder."
+                failure = "Could not start the flash. Turn on “Start when you log in”, then click Start again."
             } else {
                 failure = "Could not start the flash. \(detail)"
             }

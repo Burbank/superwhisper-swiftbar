@@ -110,7 +110,9 @@ From a copy that is already on disk:
 ./bin/install-flag-flash.sh
 ```
 
-The installer puts **Language Flash** in the main Applications folder, `/Applications`, next to your other apps. It does not go in Utilities. If that folder is not writable, it uses `~/Applications` instead, and the script prints the path. The icon is a Dutch flag with a small American flag on the corner. The window shows whether the background flash is running. If it says **Not running**, click **Start**.
+The installer puts **Language Flash** in the main Applications folder, `/Applications`, next to your other apps. It does not go in Utilities. If that folder is not writable, it uses `~/Applications` instead, and the script prints the path. The icon is a Dutch flag with a small American flag on the corner.
+
+The window has a **Start when you log in** checkbox. Turning it on registers Language Flash with macOS, so the name appears under **System Settings → General → Login Items & Extensions**. **Login Items…** opens that list. A background job installed by hand only produces a short notification and does not show the app name there.
 
 Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview Dutch**, **Preview English**, and **Preview Spanish** flash the flag on screen with the current settings.
 

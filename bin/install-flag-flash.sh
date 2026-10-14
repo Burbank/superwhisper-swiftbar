@@ -121,36 +121,35 @@ case "$SETTINGS_APP" in
   *) echo "Refusing to replace $SETTINGS_APP"; exit 1 ;;
 esac
 rm -rf "$APP" "$SETTINGS_APP"
-mkdir -p "$APP/Contents/MacOS" "$SETTINGS_APP/Contents/MacOS"
-mv "$BUILD/agent" "$BIN"
+mkdir -p "$APP/Contents/MacOS" "$SETTINGS_APP/Contents/MacOS" "$SETTINGS_APP/Contents/Library/LaunchAgents"
+cp "$BUILD/agent" "$BIN"
+cp "$BUILD/agent" "$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
 mv "$BUILD/settings" "$SETTINGS_BIN"
 rm -rf "$BUILD"
+chmod +x "$BIN" "$SETTINGS_BIN" "$SETTINGS_APP/Contents/MacOS/Language Flash Agent"
 
 write_info_plist "$APP" "Superwhisper Language Flash" "com.burbank.superwhisper-flag-flash" "Superwhisper Language Flash" "true"
 write_info_plist "$SETTINGS_APP" "Language Flash" "com.burbank.language-flash" "Language Flash" "false"
 render_icon "$APP"
 render_icon "$SETTINGS_APP"
+sed -e "s|__LOG_PATH__|${LOG}|g" \
+    "$ROOT/LaunchAgents/com.burbank.language-flash-embedded.plist.template" \
+    > "$SETTINGS_APP/Contents/Library/LaunchAgents/${LABEL}.plist"
 
 # One copy. The Applications folder is the one Finder and Launchpad show.
 if [ "$SETTINGS_APP" = "/Applications/Language Flash.app" ]; then
   rm -rf "$HOME/Applications/Language Flash.app"
 fi
 
-ln -sfn "$BIN" "$HOME/.local/bin/flag-flash"
+ln -sfn "$SETTINGS_APP/Contents/MacOS/Language Flash Agent" "$HOME/.local/bin/flag-flash"
 
-sed -e "s|__APP_EXECUTABLE__|${BIN}|g" \
-    -e "s|__LOG_PATH__|${LOG}|g" \
-    "$ROOT/LaunchAgents/com.burbank.superwhisper-flag-flash.plist.template" > "$PLIST"
-
-# A disabled service makes bootstrap fail with "Bootstrap failed: 5: Input/output error".
+# The old plist was installed by hand, so macOS never listed it under Language Flash.
+# Remove it before the app registers the same job through Login Items.
+rm -f "$PLIST"
 launchctl enable "$SERVICE" 2>/dev/null || true
 launchctl bootout "$SERVICE" 2>/dev/null || true
-if ! launchctl bootstrap "$DOMAIN" "$PLIST"; then
-  launchctl enable "$SERVICE" 2>/dev/null || true
-  launchctl bootout "$SERVICE" 2>/dev/null || true
-  launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null || true
-fi
-launchctl kickstart -k "$SERVICE" 2>/dev/null || true
+
+codesign --force --deep --sign - "$SETTINGS_APP" || echo "Could not sign Language Flash. Login Items may hide it."
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 if [ -x "$LSREGISTER" ]; then
@@ -158,15 +157,10 @@ if [ -x "$LSREGISTER" ]; then
 fi
 
 echo "Settings app: $SETTINGS_APP"
-echo "Open Language Flash from Applications. It has the flag icon."
-echo "Background item: Superwhisper Language Flash"
-echo "Leave that background item allowed under Privacy & Security → Accessibility."
-echo "System Settings → General → Login Items & Extensions → Allow in the Background"
-if launchctl print "$SERVICE" 2>/dev/null | grep -q "state = running"; then
-  echo "Background flash: running"
-else
-  echo "Background flash: not running. Open Language Flash and click Start."
-fi
+echo "In Language Flash, turn on “Start when you log in”."
+echo "macOS then lists Language Flash under System Settings → General → Login Items & Extensions."
+echo "It is not inside a Utilities folder."
+echo "If the flag stops appearing on the dictation key, allow Language Flash under Privacy & Security → Accessibility."
 echo "Log: $LOG"
 
 open "$SETTINGS_APP" || true
