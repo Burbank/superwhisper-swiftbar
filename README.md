@@ -11,6 +11,7 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 - Reads modes from `~/Documents/superwhisper/modes/*.json` — always in sync
 - Keeps your current app focused (`open -g`)
 - Instant language cues via a background **Superwhisper Mode Sounds** agent (preloaded WAVs)
+- [Language Flash](language-flash/README.md) for Superwhisper, a separate app that flashes a flag when you dictate
 
 ## How it works
 
@@ -20,7 +21,9 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 | `switch-superwhisper-mode.sh` | Plays cue + switches mode without stealing focus |
 | `cycle-superwhisper-mode.sh` | Advances to the next mode (for BTT / hotkeys) |
 | `bin/sound-server.swift` | Preloads `now_US.wav` / `now_NL.wav`, plays on FIFO command |
-| LaunchAgent | Keeps **Superwhisper Mode Sounds** running in the background |
+| [`bin/flag-flash.swift`](bin/flag-flash.swift) | [Language Flash](language-flash/README.md) on the dictation key |
+| [`bin/flag-settings.swift`](bin/flag-settings.swift) | Language Flash window in Applications |
+| LaunchAgent | Keeps **Superwhisper Mode Sounds** and **Language Flash** running in the background |
 
 Cue mapping (mode key → sound):
 
@@ -35,8 +38,9 @@ Cue mapping (mode key → sound):
 - macOS 13.3+
 - [superwhisper](https://superwhisper.com) (v2.10+)
 - [SwiftBar](https://swiftbar.app)
-- Xcode Command Line Tools / `swiftc` (only to build the sound agent)
+- Xcode Command Line Tools / `swiftc` (to build the sound agent and the flag flash)
 - `python3` (ships with macOS)
+- Accessibility permission for **Language Flash** (flag flash only)
 
 ## Installation
 
@@ -75,7 +79,11 @@ This compiles the agent, installs sounds into `~/Documents/swiftbar/sounds/`, an
 
 Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you like, then re-run the install script (or restart the agent).
 
-### 3. Keyboard toggle (F3) without breaking volume keys
+### 3. Language Flash
+
+[Language Flash](language-flash/README.md) for Superwhisper. Follow that page. Script notes are in [language-flash/install.md](language-flash/install.md).
+
+### 4. Keyboard toggle (F3) without breaking volume keys
 
 macOS cannot make only F3 a standard function key. Use BetterTouchTool only (no Karabiner):
 
@@ -121,13 +129,18 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
     now_NL.wav
     now_ES.wav
     play.fifo                                 # runtime
+  flag-flash.log                              # runtime
+  flag-flash-settings.json                    # size, opacity, time
   bin/
     sound-server.swift
     Superwhisper Mode Sounds.app/
 
+/Applications/Language Flash.app              # settings window and background flash
+
 ~/.local/bin/
   cycle-superwhisper-mode -> …/cycle-superwhisper-mode.sh
   switch-superwhisper-mode -> …/switch-superwhisper-mode.sh
+  flag-flash -> /Applications/Language Flash.app/Contents/MacOS/Language Flash Agent
 ```
 
 
@@ -148,10 +161,11 @@ Hotkeys and SwiftBar actions should call space-free symlinks in `~/.local/bin/` 
 
 ## Persistence across reboots
 
-Two LaunchAgents keep things working after restart:
+These LaunchAgents keep things working after restart:
 
-1. **Superwhisper Mode Sounds** — preloads cue audio  
-2. **ensure-superwhisper-f3** (optional, disabled by default) — can recreate the F3 shortcut at login; left off because an earlier hourly version spawned duplicates
+1. **Superwhisper Mode Sounds** — preloads cue audio
+2. **Language Flash** — flashes the active language when the dictation key is pressed. Source: [bin/flag-flash.swift](bin/flag-flash.swift)
+3. **ensure-superwhisper-f3** (optional, disabled by default) — can recreate the F3 shortcut at login; left off because an earlier hourly version spawned duplicates
 
 They live under `~/Library/LaunchAgents/` and the ensure script under  
 `~/Library/Application Support/superwhisper-swiftbar/` (LaunchAgents cannot reliably execute scripts from `Documents` due to macOS privacy).
