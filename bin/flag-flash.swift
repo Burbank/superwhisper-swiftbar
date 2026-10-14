@@ -43,7 +43,7 @@ private struct FlagSettings: Codable {
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(clamped()).write(to: url)
+        try encoder.encode(clamped()).write(to: url, options: .atomic)
     }
 
     func clamped() -> FlagSettings {

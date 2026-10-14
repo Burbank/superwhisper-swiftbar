@@ -22,6 +22,7 @@ A [SwiftBar](https://swiftbar.app) plugin that shows your active [superwhisper](
 | `cycle-superwhisper-mode.sh` | Advances to the next mode (for BTT / hotkeys) |
 | `bin/sound-server.swift` | Preloads `now_US.wav` / `now_NL.wav`, plays on FIFO command |
 | [`bin/flag-flash.swift`](bin/flag-flash.swift) | [Language flag flash](#language-flag-flash) on the dictation key |
+| [`bin/flag-settings.swift`](bin/flag-settings.swift) | **Language Flash** settings window in Applications |
 | LaunchAgent | Keeps **Superwhisper Mode Sounds** and **Superwhisper Language Flash** running in the background |
 
 Cue mapping (mode key → sound):
@@ -80,7 +81,7 @@ Replace `sounds/now_US.wav` and `sounds/now_NL.wav` with your own cues if you li
 
 ### 3. Language flag flash
 
-Source: [bin/flag-flash.swift](bin/flag-flash.swift). Installer: [bin/install-flag-flash.sh](bin/install-flag-flash.sh).
+Source: [bin/flag-flash.swift](bin/flag-flash.swift). Settings window: [bin/flag-settings.swift](bin/flag-settings.swift). Installer: [bin/install-flag-flash.sh](bin/install-flag-flash.sh).
 
 When the Superwhisper dictation key is pressed, a flag for the **current** mode flashes on every display for about 0.3 seconds. It is about a tenth of the screen wide and half transparent. Superwhisper still receives the key. The app does not track whether a recording is already running, so the press that stops a toggle flashes too. Holding the key does not flash again.
 
@@ -99,33 +100,31 @@ The flag uses the same active mode as the menu bar:
 ./bin/install-flag-flash.sh
 ```
 
-The background-item prompt is the one that keeps it running. Seeing the saved shortcut as a key also needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and add **Superwhisper Language Flash** from `~/Library/Application Support/superwhisper-swiftbar/bin/`. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
+The installer puts **Language Flash** in `/Applications` (or `~/Applications` if that folder is not writable) and opens it. The icon is a Dutch flag with a small American flag on the corner. The window shows whether the background flash is running. If it says **Not running**, click **Start**.
 
-Preview without dictating:
+Size, opacity, and time save as you move the sliders. The next dictation uses them. The background flash reads the file each time, so it does not need a restart after a change. **Preview Dutch**, **Preview English**, and **Preview Spanish** flash the flag on screen with the current settings.
 
-```bash
-~/.local/bin/flag-flash --preview en
-~/.local/bin/flag-flash --preview nl
-```
+The background-item prompt is the one that keeps the flash running. Seeing the saved shortcut as a key also needs Accessibility: open that list with `open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"` and add **Superwhisper Language Flash** from `~/Library/Application Support/superwhisper-swiftbar/bin/`. That is the background item, separate from the Language Flash window. A recording still flashes without that permission, which covers a second key that Superwhisper starts by another path.
 
-Settings are a small file, changed from the terminal. The next flash uses them; the background app does not need a restart.
+The same settings can still be changed from the terminal. Both write `~/Library/Application Support/superwhisper-swiftbar/flag-flash-settings.json`.
 
 ```bash
 ~/.local/bin/flag-flash settings
 ~/.local/bin/flag-flash set width 10
 ~/.local/bin/flag-flash set opacity 50
 ~/.local/bin/flag-flash set seconds 0.3
+~/.local/bin/flag-flash --preview en
 ```
 
 `width` is the percent of the screen width (2–80). `opacity` is the percent visible (5–100). `seconds` is how long the flag stays up (0.05–5).
 
-The app is a login item. After a restart it starts again when you log in, not before the login screen. Check it with:
+The flash is a login item. After a restart it starts again when you log in, not before the login screen. The Language Flash window shows **Running** or **Not running**. From the terminal:
 
 ```bash
 ~/.local/bin/flag-flash status
 ```
 
-`running` means it is loaded. Log: `~/Library/Application Support/superwhisper-swiftbar/flag-flash.log`
+Log: `~/Library/Application Support/superwhisper-swiftbar/flag-flash.log`
 
 ### 4. Keyboard toggle (F3) without breaking volume keys
 
@@ -174,10 +173,13 @@ Rename modes in superwhisper to 🇺🇸 / 🇳🇱 / etc. for a compact menu ba
     now_ES.wav
     play.fifo                                 # runtime
   flag-flash.log                              # runtime
+  flag-flash-settings.json                    # size, opacity, time
   bin/
     sound-server.swift
     Superwhisper Mode Sounds.app/
-    Superwhisper Language Flash.app/
+    Superwhisper Language Flash.app/          # background flash
+
+/Applications/Language Flash.app              # settings window, flag icon
 
 ~/.local/bin/
   cycle-superwhisper-mode -> …/cycle-superwhisper-mode.sh

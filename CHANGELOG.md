@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14
+
+- **Language Flash** settings window in Applications, with a Dutch-and-American flag icon. Sliders set size, opacity, and time on screen, and the window shows whether the background flash is running
+- Preview buttons flash Dutch, English, or Spanish with the settings just saved
+- Start restarts the login item when the flash is not running
+- The installer replaces the background app and starts it again, including after the earlier `Bootstrap failed: 5` error
+
 ## 2026-10-12
 
 - Flash a Dutch, American, or Spanish flag for about 0.3 seconds when dictation starts. The flag is a tenth of the screen wide and half transparent
